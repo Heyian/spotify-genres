@@ -1,0 +1,36 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - "*.*.*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-amd64
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: install ant.
+        run: |
+          curl -fsSL https://antjs.org/install | bash
+          echo "$HOME/.ant/bin" >> "$FORGEJO_PATH"
+
+      - name: install packages.
+        run: ant install
+
+      - name: build everything.
+        run: ant build
+
+      - name: retrieve version.
+        id: version
+        run: |
+          VERSION="$(jq -r '.version' package.json)"
+          echo "version=$VERSION" >> "$FORGEJO_OUTPUT"
+
+      - uses: https://github.com/spicetify/actions/publish@v1
+        with:
+          dist: dist/genres@${{ steps.version.outputs.version }}
+          release-tag: ${{ forgejo.ref_name }}
+          token: ${{ secrets.SPICETIFY_SUBMIT_TOKEN }}
