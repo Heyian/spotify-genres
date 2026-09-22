@@ -27,10 +27,13 @@ jobs:
         run: |
           mkdir -p release
 
-          bsdtar -a -cf "release/genres-${{ forgejo.ref_name }}.zip" \
-            -C "dist/genres@${{ forgejo.ref_name }}" .
+          (
+            cd "dist/genres@${{ forgejo.ref_name }}"
+            zip -qr "$FORGEJO_WORKSPACE/release/genres-${{ forgejo.ref_name }}.zip" .
+          )
 
-          sha256sum "release/genres-${{ forgejo.ref_name }}.zip" \
+          sha256sum \
+            "release/genres-${{ forgejo.ref_name }}.zip" \
             > "release/genres-${{ forgejo.ref_name }}.zip.sha256"
 
       - uses: actions/forgejo-release@v2
