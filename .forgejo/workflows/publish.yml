@@ -23,14 +23,23 @@ jobs:
       - name: build everything.
         run: ant build
 
-      - name: retrieve version.
-        id: version
+      - name: prepare release.
         run: |
-          VERSION="$(jq -r '.version' package.json)"
-          echo "version=$VERSION" >> "$FORGEJO_OUTPUT"
+          mkdir -p release
+
+          bsdtar -a -cf "release/genres-${{ forgejo.ref_name }}.zip" \
+            -C "dist/genres@${{ forgejo.ref_name }}" .
+
+          sha256sum "release/genres-${{ forgejo.ref_name }}.zip" \
+            > "release/genres-${{ forgejo.ref_name }}.zip.sha256"
+
+      - uses: actions/forgejo-release@v2
+        with:
+          direction: upload
+          release-dir: release
 
       - uses: https://github.com/spicetify/actions/publish@v1
         with:
-          dist: dist/genres@${{ steps.version.outputs.version }}
-          release-tag: ${{ forgejo.ref_name }}
+          dist: dist/genres@${{ forgejo.ref_name }}
+          artifact: ${{ forgejo.server_url }}/${{ forgejo.repository }}/releases/download/${{ forgejo.ref_name }}/genres-${{ forgejo.ref_name }}.zip
           token: ${{ secrets.SPICETIFY_SUBMIT_TOKEN }}
