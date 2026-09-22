@@ -14,16 +14,12 @@ A [Spicetify](https://github.com/spicetify/spicetify-cli) build with v3 module s
 
 ## Install from Marketplace
 
-Once the module is published to the store, you can install it from the Spicetify Marketplace, just search for "Genres" and click install.
+You can simply install the extension from Spicetify's Marketplace, just search for "Genres" by Vexcited and click install.
 
-## Install a build
+You can also manually install a version by running this command.
 
-If a packed build is attached to a release:
-
-```bash
-spicetify pkg install genres <url-to-zip>
+```sh
+# if you'd like to install v0.1.0, you can run this
+# @see https://code.vexcited.com/spicetify/genres/releases
+spicetify pkg install genres https://code.vexcited.com/spicetify/genres/releases/download/0.1.0/genres-0.1.0.zip
 ```
-
-## Credits
-
-Forked from [Tetrax-10's Spotify-Genres](https://github.com/Tetrax-10/Spicetify-Extensions).
