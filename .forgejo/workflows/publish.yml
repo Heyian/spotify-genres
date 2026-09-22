@@ -56,11 +56,20 @@ jobs:
           release_id="$(echo "$release" | sed -n 's/^{"id":\([0-9]*\).*/\1/p')"
 
           for asset in release/*; do
+            name="$(basename "$asset")"
+
+            echo "$release" | jq -r --arg name "$name" '.assets[] | select(.name == $name) | .id' \
+              | while read -r asset_id; do
+                  curl -fsS -X DELETE \
+                    -H "Authorization: token $FORGEJO_TOKEN" \
+                    "$base/releases/$release_id/assets/$asset_id"
+                done
+
             curl -fsS -X POST \
               -H "Authorization: token $FORGEJO_TOKEN" \
               -H "Content-Type: multipart/form-data" \
               -F "attachment=@$asset" \
-              "$base/releases/$release_id/assets?name=$(basename "$asset")"
+              "$base/releases/$release_id/assets?name=$name"
           done
 
       - uses: https://github.com/spicetify/actions/publish@v1
