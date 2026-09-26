@@ -37,40 +37,9 @@ jobs:
             > "release/genres-${{ forgejo.ref_name }}.zip.sha256"
 
       - name: upload release assets.
-        run: |
-          tag="${{ forgejo.ref_name }}"
-          base="${{ forgejo.server_url }}/api/v1/repos/${{ forgejo.repository }}"
-
-          release="$(curl -fsS \
-            -H "Authorization: token $FORGEJO_TOKEN" \
-            "$base/releases/tags/$tag" || true)"
-
-          if [ -z "$release" ]; then
-            release="$(curl -fsS -X POST \
-              -H "Authorization: token $FORGEJO_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "{\"tag_name\": \"$tag\", \"name\": \"$tag\"}" \
-              "$base/releases")"
-          fi
-
-          release_id="$(echo "$release" | sed -n 's/^{"id":\([0-9]*\).*/\1/p')"
-
-          for asset in release/*; do
-            name="$(basename "$asset")"
-
-            echo "$release" | jq -r --arg name "$name" '.assets[] | select(.name == $name) | .id' \
-              | while read -r asset_id; do
-                  curl -fsS -X DELETE \
-                    -H "Authorization: token $FORGEJO_TOKEN" \
-                    "$base/releases/$release_id/assets/$asset_id"
-                done
-
-            curl -fsS -X POST \
-              -H "Authorization: token $FORGEJO_TOKEN" \
-              -H "Content-Type: multipart/form-data" \
-              -F "attachment=@$asset" \
-              "$base/releases/$release_id/assets?name=$name"
-          done
+        uses: https://code.vexcited.com/forgejo/upload-release-assets@v1
+        with:
+          files: release/*
 
       - uses: https://github.com/spicetify/actions/publish@v1
         with:
