@@ -15,7 +15,7 @@
 			"/modules/*": ["./node_modules/@spicetify/kit/vendor/*"]
 		}
 	},
-	"include": ["**/*"],
+	"include": ["module/**/*"],
 	"files": [
 		"./node_modules/@spicetify/kit/vendor/shims/remote-modules.d.ts",
 		"./node_modules/@spicetify/kit/vendor/shims/chunks.d.ts",
