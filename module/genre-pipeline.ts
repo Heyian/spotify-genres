@@ -1,7 +1,7 @@
 import { decideCacheAction, type CacheRules, type GenreCacheEntry, type GenreCacheStore } from "./genre-cache.ts";
 import type { ScoredGenres } from "./labels.ts";
 import type { GenreFetchOutcome } from "./logic.ts";
-import { DroppedError, type Priority } from "./request-queue.ts";
+import { DroppedError, type Priority, type RequestQueue } from "./request-queue.ts";
 
 export interface TrackRef {
   uri: string;
@@ -129,4 +129,68 @@ export async function resolveTrack(track: TrackRef, deps: PipelineDeps, priority
     checkedAt: deps.now(),
   });
   return { genres: scored.genres, inferred: true };
+}
+
+export interface SchedulerDeps extends Omit<PipelineDeps, "cacheEpoch"> {
+  /** MusicBrainz and Deezer queues. */
+  queues: RequestQueue[];
+  render(result: GenreResult): void;
+  /** `Player.data.nextItems[0]`, mapped. */
+  nextTrack(): TrackRef | undefined;
+}
+
+export interface GenreScheduler {
+  songChanged(current: TrackRef | undefined): Promise<void>;
+  clearCache(): Promise<void>;
+}
+
+/** Latest-wins lookups for the playing track, then a prefetch of the next one once the queues are idle. */
+export function createGenreScheduler(deps: SchedulerDeps): GenreScheduler {
+  let renderToken = 0;
+  let epoch = 0;
+  const pipeline: PipelineDeps = { ...deps, cacheEpoch: () => epoch };
+
+  const allIdle = () => deps.queues.every((q) => q.isIdle());
+  const whenIdle = () =>
+    new Promise<void>((resolve) => {
+      if (allIdle()) return resolve();
+      const unsubscribe = deps.queues.map((q) =>
+        q.onIdle(() => {
+          if (!allIdle()) return;
+          unsubscribe.forEach((off) => off());
+          resolve();
+        }),
+      );
+    });
+
+  const resolveQuietly = async (track: TrackRef, priority: Priority): Promise<GenreResult | undefined> => {
+    try {
+      return await resolveTrack(track, pipeline, priority);
+    } catch (error) {
+      if (error instanceof DroppedError) return undefined;
+      return CLEARED;
+    }
+  };
+
+  return {
+    async songChanged(current) {
+      const token = ++renderToken;
+      const next = deps.nextTrack();
+      for (const q of deps.queues) q.dropWhere((key) => key !== current?.uri && key !== next?.uri); // AC16
+
+      const result = isCatalogueTrack(current) ? await resolveQuietly(current, "current") : CLEARED;
+      if (token !== renderToken) return; // AC39
+      if (result) deps.render(result);
+
+      await whenIdle();
+      if (token !== renderToken) return;
+      const upcoming = deps.nextTrack();
+      if (!isCatalogueTrack(upcoming) || upcoming.uri === current?.uri) return; // AC18
+      await resolveQuietly(upcoming, "prefetch");
+    },
+    async clearCache() {
+      epoch++; // AC38: lookups already in flight write nothing
+      await deps.store.clear();
+    },
+  };
 }
