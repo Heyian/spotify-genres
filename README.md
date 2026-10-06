@@ -24,7 +24,7 @@ What leaves your machine when it is on:
 
 - The track's **artist and title are sent to Deezer** (`api.deezer.com`) to find the matching track.
 - The track's 30-second **Deezer preview** MP3 is downloaded and analysed locally. It is kept in memory only and never stored.
-- On first use, the model (about 18 MB) and its labels are downloaded once from the Hugging Face mirror [`huggingface.co/<hf-user>/discogs-effnet-onnx`](https://huggingface.co/<hf-user>/discogs-effnet-onnx), and the ONNX Runtime Web files from jsDelivr. They are cached for later sessions.
+- On first use, the model (about 18 MB) and its labels are downloaded once from the Hugging Face mirror [`huggingface.co/Heyian/discogs-effnet-onnx`](https://huggingface.co/Heyian/discogs-effnet-onnx), and the ONNX Runtime Web files from jsDelivr. They are cached for later sessions.
 
 Inference runs inside Spotify with ONNX Runtime Web; nothing is sent to a hosted model. The model is MTG's Discogs-EffNet, licensed [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) (non-commercial use only).
 
