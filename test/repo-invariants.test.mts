@@ -33,6 +33,7 @@ test("readme_audio_section (AC33)", () => {
   assert.match(section, /opt-in/i);
   for (const needle of ["Deezer", "preview", "CC BY-NC-SA 4.0", "huggingface.co/"]) assert.ok(section.includes(needle), needle);
   assert.ok(readme.includes("https://code.vexcited.com/spicetify/genres"));
+  assert.ok(!readme.includes("<hf-user>"), "README links the real mirror");
 });
 
 test("contributing_bun (AC33)", () => {

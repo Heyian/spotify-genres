@@ -6,7 +6,7 @@ export const deezerBudget = 40, deezerWindowMs = 5000, musicbrainzBudget = 1, mu
 export const backoffInitialMs = 5000, backoffMaxMs = 60000;
 
 export const MODEL_REPO = "Heyian/discogs-effnet-onnx";
-export const MODEL_REVISION = "6ea39296c7c0e8fd55e1812aee9c8d54073746fe"; // Hugging Face commit
+export const MODEL_REVISION = "99d4b0ef1fd5d798f2afe049285c7d551e768e07"; // Hugging Face commit
 export const MODEL_SHA256 = "a280825b334797cf677939db8cd5762c0392aedd0ca6415dbc1cd083f045e43c";
 export const MODEL_VERSION = "discogs-effnet-bsdynamic-1";
 export const ORT_VERSION = "1.30.0";
