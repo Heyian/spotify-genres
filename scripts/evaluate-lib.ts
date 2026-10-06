@@ -66,3 +66,14 @@ export function summarise(rows: Array<{ preview: boolean; hit: boolean }>): { co
     hitRatePct: withPreview.length ? (hits / withPreview.length) * 100 : 0,
   };
 }
+
+/** `<tracks.csv> [--model <path>]`, flag in any position; the model defaults to the mirror folder. */
+export function parseEvalArgs(argv: string[], home: string): { csvPath?: string; modelPath: string } {
+  let modelPath = `${home}/.cache/spotify-genres/mirror/discogs-effnet-bsdynamic-1.onnx`;
+  let csvPath: string | undefined;
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--model") modelPath = argv[++i];
+    else csvPath ??= argv[i];
+  }
+  return { csvPath, modelPath };
+}

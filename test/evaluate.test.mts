@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { isHit, parseTracksCsv, summarise } from "../scripts/evaluate-lib.ts";
+import { isHit, parseEvalArgs, parseTracksCsv, summarise } from "../scripts/evaluate-lib.ts";
 
 test("parseTracksCsv on the example file", () => {
   const rows = parseTracksCsv(readFileSync(join(import.meta.dirname, "..", "eval", "tracks.example.csv"), "utf8"));
@@ -27,4 +27,11 @@ test("summarise", () => {
   assert.ok(Math.abs(s.coveragePct - 66.67) <= 0.01);
   assert.equal(s.hitRatePct, 50);
   assert.deepEqual(summarise([]), { coveragePct: 0, hitRatePct: 0 });
+});
+
+test("parseEvalArgs", () => {
+  assert.deepEqual(parseEvalArgs(["eval/tracks.csv"], "/home/x"), { csvPath: "eval/tracks.csv", modelPath: "/home/x/.cache/spotify-genres/mirror/discogs-effnet-bsdynamic-1.onnx" });
+  assert.deepEqual(parseEvalArgs(["--model", "/m.onnx", "t.csv"], "/home/x"), { csvPath: "t.csv", modelPath: "/m.onnx" });
+  assert.deepEqual(parseEvalArgs(["t.csv", "--model", "/m.onnx"], "/home/x"), { csvPath: "t.csv", modelPath: "/m.onnx" });
+  assert.equal(parseEvalArgs([], "/home/x").csvPath, undefined);
 });

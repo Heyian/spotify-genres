@@ -18,12 +18,9 @@ import { findPreview, type DeezerTransport } from "../module/deezer.ts";
 import { averageActivations, topGenres } from "../module/labels.ts";
 import { MEL_BANDS, PATCH_FRAMES, melPatches } from "../module/mel.ts";
 import { createRequestQueue } from "../module/request-queue.ts";
-import { isHit, parseTracksCsv, summarise } from "./evaluate-lib.ts";
+import { isHit, parseEvalArgs, parseTracksCsv, summarise } from "./evaluate-lib.ts";
 
-const args = process.argv.slice(2);
-const modelFlag = args.indexOf("--model");
-const modelPath = modelFlag === -1 ? join(homedir(), ".cache/spotify-genres/mirror/discogs-effnet-bsdynamic-1.onnx") : args[modelFlag + 1];
-const csvPath = args.find((a, i) => !a.startsWith("--") && i !== modelFlag + 1);
+const { csvPath, modelPath } = parseEvalArgs(process.argv.slice(2), homedir());
 if (!csvPath) {
   console.error("usage: bun run evaluate <tracks.csv> [--model <path>]");
   process.exit(2);
