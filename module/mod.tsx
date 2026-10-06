@@ -555,6 +555,10 @@ export default async function (ctx: ModuleRuntimeContext) {
     findPreview: (track, priority) =>
       deezerQueue.enqueue(track.uri, priority, () => findPreview(track, jsonp, durationToleranceS)),
     classifyPreview,
+    invalidate: () => {
+      ++updateToken; // an injection still resolving playlists for the old track must not land
+      clearGenres();
+    },
     render: (result) => {
       genlog("debug", "render genres:", result);
       void injectGenres(result.genres, ++updateToken, result.inferred);

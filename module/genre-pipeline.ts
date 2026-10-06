@@ -41,6 +41,8 @@ const CLEARED: GenreResult = { genres: [], inferred: false };
 /** Cache → MusicBrainz → audio for one track (spec §4.2). */
 export async function resolveTrack(track: TrackRef, deps: PipelineDeps, priority: Priority): Promise<GenreResult> {
   if (!isCatalogueTrack(track)) return CLEARED;
+  // Without both artist and title any lookup is a guess (upstream skipped these too).
+  if (!track.artist.trim() || !track.title.trim()) return CLEARED;
 
   const epoch = deps.cacheEpoch();
   // A failing store degrades to "no cache" (Review Focus 5).
@@ -59,7 +61,14 @@ export async function resolveTrack(track: TrackRef, deps: PipelineDeps, priority
     cached = undefined;
   }
 
-  const decision = decideCacheAction(cached, deps.now(), deps.rules);
+  let decision = decideCacheAction(cached, deps.now(), deps.rules);
+  if (decision.kind !== "lookup") {
+    const { entry } = decision;
+    // Inferred genres only show while the setting is on (AC1).
+    if (entry.source === "audio" && !deps.audioEnabled()) decision = { kind: "lookup" };
+    // "Nothing found" recorded while audio was off: retry now that it can run.
+    if (entry.source === "none" && entry.audioTried === false && deps.audioEnabled() && deps.modelReady()) decision = { kind: "lookup" };
+  }
   if (decision.kind === "serve") {
     return { genres: decision.entry.genres, inferred: decision.entry.source === "audio" };
   }
@@ -89,16 +98,16 @@ export async function resolveTrack(track: TrackRef, deps: PipelineDeps, priority
     return { genres: mb.genres, inferred: false };
   }
 
-  const writeNone = async () => {
-    if (mb.reachable) await put({ uri: track.uri, genres: [], source: "none", checkedAt: deps.now() });
+  const writeNone = async (audioTried: boolean) => {
+    if (mb.reachable) await put({ uri: track.uri, genres: [], source: "none", audioTried, checkedAt: deps.now() });
   };
 
   if (!deps.audioEnabled()) {
-    await writeNone();
+    await writeNone(false);
     return CLEARED;
   }
   // Skipped audio step: no `none` entry, so a later play can still try (AC6, Review Focus 2).
-  if (!deps.modelReady() || track.durationS === null || !track.artist.trim()) return CLEARED;
+  if (!deps.modelReady() || track.durationS === null) return CLEARED;
 
   let preview: string | null;
   try {
@@ -108,7 +117,7 @@ export async function resolveTrack(track: TrackRef, deps: PipelineDeps, priority
     return CLEARED;
   }
   if (!preview) {
-    await writeNone();
+    await writeNone(true);
     return CLEARED;
   }
 
@@ -135,6 +144,8 @@ export interface SchedulerDeps extends Omit<PipelineDeps, "cacheEpoch"> {
   /** MusicBrainz and Deezer queues. */
   queues: RequestQueue[];
   render(result: GenreResult): void;
+  /** Called synchronously on every song change, before any lookup: drop whatever the previous track rendered. */
+  invalidate(): void;
   /** `Player.data.nextItems[0]`, mapped. */
   nextTrack(): TrackRef | undefined;
 }
@@ -175,6 +186,7 @@ export function createGenreScheduler(deps: SchedulerDeps): GenreScheduler {
   return {
     async songChanged(current) {
       const token = ++renderToken;
+      deps.invalidate();
       const next = deps.nextTrack();
       for (const q of deps.queues) q.dropWhere((key) => key !== current?.uri && key !== next?.uri); // AC16
 

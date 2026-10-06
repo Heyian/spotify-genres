@@ -59,8 +59,16 @@ export interface Classifier {
   dispose(): void;
 }
 
-/** Start the Blob-URL worker and load the model once. */
-export function createClassifier(assets: ModelAssets): Promise<Classifier> {
+export interface ClassifierOptions {
+  /** Tests inject a fake; defaults to `new Worker(url)`. */
+  createWorker?: (url: string) => Worker;
+  initTimeoutMs?: number;
+  runTimeoutMs?: number;
+}
+
+/** Start the Blob-URL worker and load the model once. A hung or failed start disposes the worker. */
+export function createClassifier(assets: ModelAssets, opts: ClassifierOptions = {}): Promise<Classifier> {
+  const { createWorker = (url: string) => new Worker(url), initTimeoutMs = 60_000, runTimeoutMs = 30_000 } = opts;
   const blobUrl = (part: BlobPart, type: string) => URL.createObjectURL(new Blob([part], { type }));
   const urls = {
     worker: blobUrl(workerSource(), "text/javascript"),
@@ -68,50 +76,76 @@ export function createClassifier(assets: ModelAssets): Promise<Classifier> {
     wasm: blobUrl(assets.ortWasm, "application/wasm"),
     glue: blobUrl(assets.ortGlue, "text/javascript"),
   };
-  const worker = new Worker(urls.worker);
-  const pending = new Map<number, { resolve(a: Float32Array): void; reject(e: Error): void }>();
+  const worker = createWorker(urls.worker);
+  const pending = new Map<number, { reject(e: Error): void; resolve(a: Float32Array): void; timer: ReturnType<typeof setTimeout> }>();
   let nextId = 0;
   let disposed = false;
+
+  const failAll = (error: Error) => {
+    for (const p of pending.values()) {
+      clearTimeout(p.timer);
+      p.reject(error);
+    }
+    pending.clear();
+  };
 
   const dispose = () => {
     if (disposed) return;
     disposed = true;
     worker.terminate();
     Object.values(urls).forEach((url) => URL.revokeObjectURL(url));
-    for (const { reject } of pending.values()) reject(new Error("Classifier disposed"));
-    pending.clear();
+    failAll(new Error("Classifier disposed"));
+  };
+
+  const classifier: Classifier = {
+    run(patches, n) {
+      if (disposed) return Promise.reject(new Error("Classifier disposed"));
+      const id = nextId++;
+      const copy = patches.slice();
+      return new Promise<Float32Array>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          pending.delete(id);
+          reject(new Error(`Classifier run timed out after ${runTimeoutMs} ms`));
+        }, runTimeoutMs);
+        pending.set(id, { resolve, reject, timer });
+        worker.postMessage({ type: "run", id, patches: copy, n }, [copy.buffer]);
+      });
+    },
+    dispose,
   };
 
   return new Promise((resolve, reject) => {
+    let ready = false;
+    const initTimer = setTimeout(() => {
+      dispose();
+      reject(new Error(`Classifier start timed out after ${initTimeoutMs} ms`));
+    }, initTimeoutMs);
+    const failStart = (error: Error) => {
+      clearTimeout(initTimer);
+      dispose();
+      reject(error);
+    };
+
     worker.onerror = (event) => {
       const error = new Error(`Classifier worker failed: ${event.message}`);
-      for (const p of pending.values()) p.reject(error);
-      pending.clear();
-      reject(error);
+      if (!ready) return failStart(error);
+      failAll(error);
     };
     worker.onmessage = (event: MessageEvent) => {
       const msg = event.data;
       if (msg.type === "ready") {
-        resolve({
-          run(patches, n) {
-            if (disposed) return Promise.reject(new Error("Classifier disposed"));
-            const id = nextId++;
-            const copy = patches.slice();
-            return new Promise<Float32Array>((res, rej) => {
-              pending.set(id, { resolve: res, reject: rej });
-              worker.postMessage({ type: "run", id, patches: copy, n }, [copy.buffer]);
-            });
-          },
-          dispose,
-        });
+        ready = true;
+        clearTimeout(initTimer);
+        resolve(classifier);
       } else if (msg.type === "init-error") {
-        dispose();
-        reject(new Error(msg.message));
+        failStart(new Error(msg.message));
       } else if (msg.type === "result" || msg.type === "error") {
         const p = pending.get(msg.id);
+        if (!p) return;
         pending.delete(msg.id);
-        if (msg.type === "result") p?.resolve(msg.activations);
-        else p?.reject(new Error(msg.message));
+        clearTimeout(p.timer);
+        if (msg.type === "result") p.resolve(msg.activations);
+        else p.reject(new Error(msg.message));
       }
     };
     const model = assets.model.slice(0);

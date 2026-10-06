@@ -41,6 +41,7 @@ function setup(next?: TrackRef) {
   const store = createMemoryStore();
   const q = fakeQueue();
   const renders: GenreResult[] = [];
+  const shown = () => renders.filter((r) => r.genres[0] !== "<invalidated>");
   const mbCalls: string[] = [];
   const holds = new Map<string, Promise<GenreFetchOutcome>>();
   let nextTrack = next;
@@ -58,9 +59,10 @@ function setup(next?: TrackRef) {
     classifyPreview: async () => ({ genres: [], scores: [] }),
     queues: [q.queue],
     render: (r) => void renders.push(r),
+    invalidate: () => void renders.push({ genres: ["<invalidated>"], inferred: false }),
     nextTrack: () => nextTrack,
   };
-  return { deps, store, q, renders, mbCalls, holds, setNext: (t: TrackRef | undefined) => void (nextTrack = t) };
+  return { deps, store, q, renders, shown, mbCalls, holds, setNext: (t: TrackRef | undefined) => void (nextTrack = t) };
 }
 
 test("drops_unrelated_work_on_songchange (AC16)", async () => {
@@ -82,7 +84,7 @@ test("stale_lookup_not_rendered (AC39)", async () => {
   await scheduler.songChanged(ref("b"));
   held.resolve({ genres: ["late"], reachable: true });
   await first;
-  assert.deepEqual(s.renders, [{ genres: ["b"], inferred: false }]);
+  assert.deepEqual(s.shown(), [{ genres: ["b"], inferred: false }]);
 });
 
 test("prefetch_after_idle_no_render (AC18)", async () => {
@@ -93,7 +95,7 @@ test("prefetch_after_idle_no_render (AC18)", async () => {
   assert.equal(await s.store.get("spotify:track:next"), undefined);
   s.q.becomeIdle();
   await done;
-  assert.equal(s.renders.length, 1);
+  assert.equal(s.shown().length, 1);
   assert.deepEqual((await s.store.get("spotify:track:next"))?.genres, ["next"]);
 });
 
@@ -128,12 +130,24 @@ test("lookup_started_before_clear_writes_nothing (AC38)", async () => {
   held.resolve({ genres: ["rock"], reachable: true });
   await pending;
   assert.equal(await s.store.get("spotify:track:a"), undefined);
-  assert.deepEqual(s.renders, [{ genres: ["rock"], inferred: false }]);
+  assert.deepEqual(s.shown(), [{ genres: ["rock"], inferred: false }]);
 });
 
 test("no current track clears the row", async () => {
   const s = setup();
   await createGenreScheduler(s.deps).songChanged(undefined);
-  assert.deepEqual(s.renders, [{ genres: [], inferred: false }]);
+  assert.deepEqual(s.shown(), [{ genres: [], inferred: false }]);
   assert.equal(s.mbCalls.length, 0);
+});
+
+test("song change invalidates the previous render before any lookup (final review I1)", async () => {
+  const s = setup();
+  const held = deferred<GenreFetchOutcome>();
+  s.holds.set("spotify:track:b", held.promise);
+  const scheduler = createGenreScheduler(s.deps);
+  await scheduler.songChanged(ref("a"));
+  const pending = scheduler.songChanged(ref("b"));
+  assert.deepEqual(s.renders.map((r) => r.genres[0]), ["<invalidated>", "a", "<invalidated>"]);
+  held.resolve({ genres: ["b"], reachable: true });
+  await pending;
 });

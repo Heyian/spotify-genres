@@ -12,6 +12,8 @@ export interface GenreCacheEntry {
   scores?: number[];
   /** Audio only. */
   modelVersion?: string;
+  /** `none` only: false when the audio step was off, so enabling it later retries the track. */
+  audioTried?: boolean;
   /** Ms epoch of the last lookup that produced or confirmed this entry. */
   checkedAt: number;
 }

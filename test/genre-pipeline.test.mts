@@ -157,18 +157,59 @@ test("findPreview failure other than drop → cleared, nothing written", async (
   assert.equal(calls.puts.length, 0);
 });
 
-test("missing duration or empty artist skips audio and writes no none (Review Focus 2)", async () => {
-  for (const t of [{ ...track, durationS: null }, { ...track, artist: " " }]) {
-    const miss = setup({ mb: MISS });
-    assert.deepEqual(await resolveTrack(t, miss.deps, "current"), { genres: [], inferred: false });
-    assert.equal(miss.calls.mb, 1);
-    assert.equal(miss.calls.deezer, 0);
-    assert.equal(miss.calls.puts.length, 0);
+test("missing duration skips audio and writes no none (Review Focus 2)", async () => {
+  const t = { ...track, durationS: null };
+  const miss = setup({ mb: MISS });
+  assert.deepEqual(await resolveTrack(t, miss.deps, "current"), { genres: [], inferred: false });
+  assert.equal(miss.calls.mb, 1);
+  assert.equal(miss.calls.deezer, 0);
+  assert.equal(miss.calls.puts.length, 0);
 
-    const hit = setup({ mb: HIT });
-    assert.deepEqual(await resolveTrack(t, hit.deps, "current"), { genres: ["rock"], inferred: false });
-    assert.deepEqual(hit.calls.puts.map((p) => p.source), ["musicbrainz"]);
+  const hit = setup({ mb: HIT });
+  assert.deepEqual(await resolveTrack(t, hit.deps, "current"), { genres: ["rock"], inferred: false });
+  assert.deepEqual(hit.calls.puts.map((p) => p.source), ["musicbrainz"]);
+});
+
+test("empty artist or title: no lookup at all, nothing written (Review Focus 2, upstream behaviour)", async () => {
+  for (const t of [{ ...track, artist: " " }, { ...track, title: "" }]) {
+    const { deps, calls } = setup({ mb: HIT });
+    assert.deepEqual(await resolveTrack(t, deps, "current"), { genres: [], inferred: false });
+    assert.equal(calls.mb + calls.deezer, 0);
+    assert.equal(calls.puts.length, 0);
   }
+});
+
+test("none written while audio was off is retried once audio is on and ready (final review I2)", async () => {
+  const off = setup({ mb: MISS, audio: false });
+  await resolveTrack(track, off.deps, "current");
+  const store = createMemoryStore();
+  await store.put(off.calls.puts[0]);
+
+  const stillOff = setup({ mb: MISS, audio: false, store });
+  await resolveTrack(track, stillOff.deps, "current");
+  assert.equal(stillOff.calls.mb, 0); // served from cache
+
+  const on = setup({ mb: MISS, store });
+  assert.deepEqual(await resolveTrack(track, on.deps, "current"), { genres: AUDIO.genres, inferred: true });
+  assert.equal(on.calls.deezer, 1);
+});
+
+test("none written after the audio step ran is served while fresh (AC11, AC21)", async () => {
+  const first = setup({ mb: MISS, preview: null });
+  await resolveTrack(track, first.deps, "current");
+  const store = createMemoryStore();
+  await store.put(first.calls.puts[0]);
+  const again = setup({ mb: MISS, store });
+  await resolveTrack(track, again.deps, "current");
+  assert.equal(again.calls.mb + again.calls.deezer, 0);
+});
+
+test("audio entries are not shown while the setting is off (AC1, final review)", async () => {
+  const fresh = { genres: ["darkwave"], scores: [0.3], modelVersion: MODEL_VERSION, source: "audio" as const, checkedAt: NOW };
+  const { deps, calls } = setup({ mb: MISS, audio: false, store: await seeded(fresh) });
+  assert.deepEqual(await resolveTrack(track, deps, "current"), { genres: [], inferred: false });
+  assert.equal(calls.mb, 1);
+  assert.equal(calls.deezer, 0);
 });
 
 const staleAudio = { genres: ["darkwave"], scores: [0.3], modelVersion: MODEL_VERSION, source: "audio" as const, checkedAt: NOW - audioRecheckDays * DAY_MS };
