@@ -5,16 +5,38 @@ import {
   addGenreRowToGridTemplate,
   readConfig,
   mergeAndWriteConfig,
-  prettifyGenre,
-  escapeHtml,
   isSoundOfSpotifyPlaylist,
-  isRejectedPlaylist,
   camelize,
   defaultConfig,
   fetchGenresFromMusicBrainz,
+  genreItemHtml,
   type CacheConfig,
   type GenrePlaylist,
 } from "./logic.ts";
+import {
+  AUDIO_FALLBACK_STORAGE_KEY,
+  MODEL_VERSION,
+  audioRecheckDays,
+  backoffInitialMs,
+  backoffMaxMs,
+  deezerBudget,
+  deezerWindowMs,
+  durationToleranceS,
+  musicbrainzBudget,
+  musicbrainzTtlDays,
+  musicbrainzWindowMs,
+  notFoundTtlDays,
+} from "./config.ts";
+import { createPreviewClassifier } from "./audio-decode.ts";
+import { createClassifier, type Classifier } from "./classifier-worker.ts";
+import { findPreview } from "./deezer.ts";
+import { openIndexedDbStore } from "./genre-cache-idb.ts";
+import { createGenreScheduler, type TrackRef } from "./genre-pipeline.ts";
+import { createJsonpTransport } from "./jsonp.ts";
+import type { ScoredGenres } from "./labels.ts";
+import { createModelStore } from "./model-store.ts";
+import { createRequestQueue } from "./request-queue.ts";
+import { registerGenreSettings } from "./settings.tsx";
 
 /** Verbose per-songchange logging is opt-in via storage `showGenre:debug`. */
 let debugEnabled = false;
@@ -230,14 +252,6 @@ function clearGenres(): void {
   trackGenresContainer = null;
 }
 
-function makeGenreAnchor(uri: string | null, genre: string): string {
-  const label = escapeHtml(prettifyGenre(genre));
-  if (!uri || isRejectedPlaylist(uri)) {
-    return `<a class="spicetify-genres-item" href="#">${label}</a>`;
-  }
-  return `<a class="spicetify-genres-item" href="${escapeHtml(uri)}">${label}</a>`;
-}
-
 /**
  * Fallback definition for Spotify's playlist-search query.
  *
@@ -379,7 +393,7 @@ function extractSearchItems(data: unknown): Array<Record<string, unknown>> {
 /**
  * Inject the genres row into the now-playing info container.
  */
-async function injectGenres(genres: string[], token: number): Promise<void> {
+async function injectGenres(genres: string[], token: number, inferred = false): Promise<void> {
   if (token !== updateToken) return;
   if (genres.length === 0) {
     clearGenres();
@@ -402,7 +416,7 @@ async function injectGenres(genres: string[], token: number): Promise<void> {
   if (token !== updateToken) return;
   genlog("debug", "genre -> playlist resolution:", playlists);
 
-  const items = playlists.map((p) => makeGenreAnchor(p.uri, p.genre)).join("<span>, </span>");
+  const items = playlists.map((p) => genreItemHtml(p.uri, p.genre, inferred)).join("<span>, </span>");
   if (!trackGenresContainer) trackGenresContainer = document.createElement("div");
   trackGenresContainer!.className = "spicetify-genres";
   trackGenresContainer!.style.gridArea = "genres";
@@ -461,68 +475,115 @@ function resolveMusicBrainzFetch(): typeof fetch {
   return fetch;
 }
 
+type PlayerItem = {
+  uri?: string;
+  duration?: { milliseconds?: number };
+  metadata?: Record<string, string>;
+};
+
+/** Map a Spotify player item to the pipeline's track reference. */
+function toTrackRef(item: PlayerItem | undefined): TrackRef | undefined {
+  if (!item?.uri) return undefined;
+  const type = (() => {
+    try {
+      return client.uri?.fromString(item.uri!)?.type;
+    } catch {
+      return undefined;
+    }
+  })();
+  const durationMs = item.duration?.milliseconds ?? Number(item.metadata?.duration);
+  const durationS = durationMs / 1000;
+  return {
+    uri: item.uri,
+    artist: item.metadata?.artist_name ?? "",
+    title: item.metadata?.title ?? "",
+    durationS: Number.isFinite(durationS) && durationS > 0 ? durationS : null,
+    isLocal: item.metadata?.is_local === "true" || item.uri.startsWith("spotify:local:"),
+    isTrack: type === "track",
+  };
+}
+
+const sha256Hex = async (buf: ArrayBuffer): Promise<string> =>
+  Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", buf)), (b) => b.toString(16).padStart(2, "0")).join("");
+
 export default async function (ctx: ModuleRuntimeContext) {
-  createRegistrar(ctx);
+  const registrar = createRegistrar(ctx);
   genlog("info", "module loaded, version 0.1.0");
 
   CONFIG = readConfig((k) => client.storage.get(k));
   debugEnabled = client.storage.get("showGenre:debug") === "true";
 
-  const updateGenres = async (): Promise<void> => {
-    const token = ++updateToken;
-    const item = client.player?.data?.item as { uri?: string; metadata?: Record<string, string> } | undefined;
-    genlog("debug", "updateGenres triggered; item:", item?.uri ?? "(none)");
-    if (!item?.uri || item.metadata?.is_local === "true") {
-      genlog("debug", "no item or local file, clearing");
-      clearGenres();
-      return;
-    }
-    const type = (() => {
-      try {
-        return client.uri?.fromString(item.uri!)?.type;
-      } catch {
-        return undefined;
-      }
-    })();
-    if (type !== "track") {
-      genlog("debug", "not a track (type=", type, "), clearing");
-      clearGenres();
-      return;
-    }
+  const audioEnabled = () => client.storage.get(AUDIO_FALLBACK_STORAGE_KEY) === "true";
+  const modelStore = createModelStore({ caches: window.caches, fetch: window.fetch.bind(window), digestHex: sha256Hex });
 
-    const artist_name = item.metadata?.artist_name ?? "";
-    const title = item.metadata?.title ?? "";
-    if (!artist_name || !title) {
-      genlog("debug", "missing artist/title metadata; artist=", artist_name, "title=", title);
-      return;
+  // The classifier (worker + model) is created on first use and kept for the session.
+  let classifier: Promise<{ worker: Classifier; classify: (url: string) => Promise<ScoredGenres> }> | null = null;
+  const classifyPreview = async (url: string): Promise<ScoredGenres> => {
+    classifier ??= (async () => {
+      const assets = await modelStore.load();
+      const labels = assets.labels;
+      const worker = await createClassifier(assets);
+      return { worker, classify: createPreviewClassifier(worker, labels) };
+    })().catch((error) => {
+      classifier = null; // a failed start is retried on the next track
+      throw error;
+    });
+    try {
+      return await (await classifier).classify(url);
+    } catch (error) {
+      genlog("warn", "audio classification failed", error);
+      throw error;
     }
-    genlog("debug", `looking up MusicBrainz for "${title}" by "${artist_name}"`);
-
-    // Spotify's page CSP blocks direct cross-origin fetches, and the local
-    // daemon's hop is refused by MusicBrainz, so route through the hosted
-    // proxy via resolveMusicBrainzFetch.
-    const outcome = await fetchGenresFromMusicBrainz(artist_name, title, resolveMusicBrainzFetch());
-    if (token !== updateToken) return;
-    genlog("debug", "MusicBrainz outcome:", outcome);
-    if (!outcome.reachable) {
-      genlog("warn", `MusicBrainz is unreachable from inside Spotify (${outcome.reason}).`);
-      clearGenres();
-      return;
-    }
-    if (outcome.genres.length === 0) {
-      genlog("warn", "No genres found for the current track, removing genres from the UI...");
-      clearGenres();
-      return;
-    }
-    genlog("debug", "genres found:", outcome.genres);
-    await injectGenres(outcome.genres, token);
   };
 
-  await updateGenres();
+  const mbQueue = createRequestQueue({ budget: musicbrainzBudget, windowMs: musicbrainzWindowMs, backoffInitialMs, backoffMaxMs });
+  const deezerQueue = createRequestQueue({ budget: deezerBudget, windowMs: deezerWindowMs, backoffInitialMs, backoffMaxMs });
+  const jsonp = createJsonpTransport();
+
+  const scheduler = createGenreScheduler({
+    store: openIndexedDbStore(),
+    rules: { musicbrainzTtlDays, audioRecheckDays, notFoundTtlDays, modelVersion: MODEL_VERSION },
+    now: () => Date.now(),
+    queues: [mbQueue, deezerQueue],
+    musicbrainz: (track, priority) =>
+      mbQueue.enqueue(track.uri, priority, () => {
+        genlog("debug", `looking up MusicBrainz for "${track.title}" by "${track.artist}"`);
+        return fetchGenresFromMusicBrainz(track.artist, track.title, resolveMusicBrainzFetch());
+      }),
+    audioEnabled,
+    modelReady: () => modelStore.status().state === "ready",
+    findPreview: (track, priority) =>
+      deezerQueue.enqueue(track.uri, priority, () => findPreview(track, jsonp, durationToleranceS)),
+    classifyPreview,
+    render: (result) => {
+      genlog("debug", "render genres:", result);
+      void injectGenres(result.genres, ++updateToken, result.inferred);
+    },
+    nextTrack: () => toTrackRef((client.player?.data as { nextItems?: PlayerItem[] } | undefined)?.nextItems?.[0]),
+  });
+
+  const updateGenres = (): void => {
+    const current = toTrackRef(client.player?.data?.item as PlayerItem | undefined);
+    genlog("debug", "updateGenres triggered; item:", current?.uri ?? "(none)");
+    void scheduler.songChanged(current);
+  };
+
+  registerGenreSettings(registrar, {
+    store: modelStore,
+    getEnabled: audioEnabled,
+    setEnabled: (value) => client.storage.set(AUDIO_FALLBACK_STORAGE_KEY, String(value)),
+    clearCache: () => scheduler.clearCache(),
+  });
+  await modelStore.init();
+  // Enabled earlier but the cached model is gone (cleared site data): fetch it again.
+  if (audioEnabled() && modelStore.status().state === "not-downloaded") void modelStore.download();
+
+  updateGenres();
   client.player?.addEventListener?.("songchange", updateGenres);
 
   ctx.defer(() => {
     client.player?.removeEventListener?.("songchange", updateGenres);
+    void classifier?.then(({ worker }) => worker.dispose(), () => undefined);
     clearGenres();
   });
 }

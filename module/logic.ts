@@ -1,3 +1,5 @@
+import { INFERRED_TITLE } from "./config.ts";
+
 const SETTINGS_KEY = "showGenre:settings";
 
 const GENRE_GRID_AREA = '"genres genres"';
@@ -79,6 +81,18 @@ export const isRejectedPlaylist = (uri: string): boolean => uri.includes(REJECTE
 
 /** Title-case a genre label for display ("rock and roll" -> "Rock And Roll"). */
 export const prettifyGenre = (genre: string): string => genre.replace(/(^\w{1})|([\s-]+\w{1})/g, (c) => c.toUpperCase());
+
+/**
+ * One genre item in the now-playing row. Audio-inferred genres are italic,
+ * prefixed with "≈" and carry the model credit as a tooltip (AC29); an
+ * unresolved playlist renders as a non-navigable "#" link (AC30).
+ */
+export function genreItemHtml(uri: string | null, genre: string, inferred: boolean): string {
+  const label = escapeHtml(prettifyGenre(genre));
+  const href = !uri || isRejectedPlaylist(uri) ? "#" : escapeHtml(uri);
+  if (!inferred) return `<a class="spicetify-genres-item" href="${href}">${label}</a>`;
+  return `<a class="spicetify-genres-item spicetify-genres-inferred" href="${href}" title="${escapeHtml(INFERRED_TITLE)}">≈ ${label}</a>`;
+}
 
 /**
  * Inject a `genres` row into the now-playing info container's CSS grid.
