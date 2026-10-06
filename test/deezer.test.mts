@@ -10,7 +10,9 @@ test("search_url_direct (AC40)", () => {
   const url = buildDeezerSearchUrl(track);
   assert.ok(url.startsWith("https://api.deezer.com/search?"), url);
   assert.ok(!url.includes("cors-proxy"));
-  assert.equal(new URL(url).searchParams.get("q"), 'artist:"Artist" track:"Song"');
+  // Deezer's artist:/track: field filters return no data (live probe 2026-10-06); pickCandidate does the matching.
+  assert.equal(new URL(url).searchParams.get("q"), "Artist Song");
+  assert.equal(new URL(url).searchParams.get("limit"), "25");
 });
 
 test("quota_detection (AC15)", () => {

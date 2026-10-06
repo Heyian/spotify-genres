@@ -6,12 +6,15 @@ export type DeezerTransport = (url: string) => Promise<{ status?: number; body: 
 
 const DEEZER_API = "https://api.deezer.com/";
 
-/** Advanced-search URL straight to api.deezer.com, never through a CORS proxy (AC40). */
+/**
+ * Plain-text search URL straight to api.deezer.com, never through a CORS proxy
+ * (AC40). Deezer's `artist:"…" track:"…"` filters returned no data in a live
+ * probe on 2026-10-06, so the query is free text and `pickCandidate` matches.
+ */
 export function buildDeezerSearchUrl(track: TrackQuery): string {
-  const quoted = (s: string) => `"${s.replace(/"/g, " ").trim()}"`;
   const url = new URL("search", DEEZER_API);
-  url.searchParams.set("q", `artist:${quoted(track.artist)} track:${quoted(track.title)}`);
-  url.searchParams.set("limit", "10");
+  url.searchParams.set("q", `${track.artist} ${track.title}`.replace(/\s+/g, " ").trim());
+  url.searchParams.set("limit", "25");
   return url.toString();
 }
 
