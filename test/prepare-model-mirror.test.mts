@@ -10,12 +10,14 @@ import { spawn } from "node:child_process";
 
 const MODEL = "discogs-effnet-bsdynamic-1.onnx";
 const LABELS = "genre_discogs400-discogs-effnet-1.json";
+const MTG_LICENSE = "The model files are copyrighted by Universitat Pompeu Fabra 2019-2021\n(fixture text)\n";
 const SCRIPT = join(import.meta.dirname, "..", "scripts", "prepare-model-mirror.sh");
 
 async function runWithServedModel(model: Buffer): Promise<{ code: number | null; stdout: string; out: string }> {
   const files: Record<string, Buffer> = {
     [`/${MODEL}`]: model,
     [`/${LABELS}`]: Buffer.from(JSON.stringify({ classes: ["Rock---Indie Rock"] })),
+    "/LICENSE": Buffer.from(MTG_LICENSE),
   };
   const server = createServer((req, res) => {
     const body = files[req.url ?? ""];
@@ -44,6 +46,22 @@ test("writes the four mirror files and prints the model SHA-256 last", async () 
   assert.deepEqual(readdirSync(out).sort(), ["LICENSE", "README.md", LABELS, MODEL].sort());
   const readme = readFileSync(join(out, "README.md"), "utf8");
   assert.match(readme, /^---\n(?:.*\n)*?license: cc-by-nc-sa-4\.0\n(?:.*\n)*?---\n/);
+  for (const needle of [
+    "Pablo Alonso-Jiménez",
+    "Music Representation Learning Based on Editorial Metadata from Discogs",
+    "Tensorflow Audio Models in {Essentia}",
+    "Universitat Pompeu Fabra",
+    "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "BY-NC-ND",
+    "without warranties",
+    "No changes were made",
+  ]) {
+    assert.ok(readme.includes(needle), needle);
+  }
+  // The 2023 paper is MAEST's, not Discogs-EffNet's.
+  assert.ok(!readme.includes("Efficient supervised training"));
+  const license = readFileSync(join(out, "LICENSE"), "utf8");
+  assert.ok(license.includes(MTG_LICENSE), "MTG's LICENSE is included verbatim");
   const last = stdout.trim().split("\n").at(-1);
   assert.equal(last, createHash("sha256").update(model).digest("hex"));
 });
