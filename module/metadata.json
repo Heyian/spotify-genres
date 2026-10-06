@@ -1,8 +1,8 @@
 {
-	"name": "genres",
+	"name": "spotify-genres",
 	"kind": "extension",
 	"version": "0.1.0",
-	"authors": ["Vexcited"],
+	"authors": ["Vexcited", "Heyian"],
 	"description": "Show the genres of the currently playing track in the player bar, with a click-through to the matching 'The Sound of Spotify' playlist.",
 	"entries": {
 		"js": "index.js",
@@ -22,6 +22,6 @@
     ]
   },
 	"preview": "https://cdn.vexcited.com/uploads/537192869-5c23ba9e-8e92-4b3b-9e0f-71a37501589e.png",
-	"repository": "https://code.vexcited.com/spicetify/genres",
+	"repository": "https://github.com/Heyian/spotify-genres",
 	"license": "MIT"
 }
