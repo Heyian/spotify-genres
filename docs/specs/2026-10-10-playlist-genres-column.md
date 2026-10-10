@@ -81,6 +81,8 @@ The backfill decides refreshes separately with `needsLookup`.
 
 ## 5. Acceptance Criteria
 
+IDs are stable. AC37 and AC38 were added after the 2026-10-10 cross-model critique, and each sits in its topic group.
+
 Column
 - **AC1** Given the toggle is on (or `showGenre:playlistColumn` is absent), when a `/playlist/<id>` page shows its tracklist, then the header row has one "Genres" header cell immediately before `.main-trackList-rowSectionEnd`, and every track row has exactly one genres cell in the same position.
 - **AC2** Given the column is shown, when the "Genres" header is clicked, then the track order and Spotify's sort indicator do not change.
@@ -89,8 +91,8 @@ Column
 - **AC5** Given a catalogue track with no entry, then the cell shows "…" with the waiting style and `title="Looking up genres"`.
 - **AC6** Given a `none` entry, then the cell shows "—" with `title="No genres found"`.
 - **AC7** Given a local file, a non-track item, or a track with an empty artist or title, then the cell is empty with no `title`, and the backfill never picks it.
-- **AC8** Given an entry whose age is past its lifetime under the 2026-10-06 rules, then the cell still shows that entry's display (genres or "—") until a new entry for the track is written.
-- **AC9** Given a genre string `<img src=x onerror=alert(1)>`, then the cell contains that literal text and no child element is created from it.
+- **AC8** Given an entry whose age is past its lifetime under the 2026-10-06 rules, then its age alone does not change the cell: AC3–AC7 apply to it as to a fresh entry (so an `audio` entry still shows waiting while the audio setting is off), until a new entry for the track is written or the cache is cleared.
+- **AC9** Given a genre string `<img src=x onerror=alert(1)>`, then the cell's text content equals `prettifyGenre` of that string, and no child element is created from it.
 - **AC10** Given a row element reused for a different track, then after the next observer pass its cell shows the new track's display and never the previous track's.
 - **AC11** Given a cell is rendered, when an entry for its track is written by the backfill or by the now-playing lookup, then the cell updates without a page reload.
 - **AC12** Given Spotify's loading placeholder rows, then each has one empty genres cell.
@@ -99,33 +101,35 @@ Column
 - **AC15** When the toggle is turned off or the extension unloads, then every genres cell, the header cell, the style tag and the tracklist marker attribute are removed. `aria-colcount` and the end cells' `aria-colindex` return to Spotify's values, and no further backfill lookup starts.
 - **AC16** Given the toggle is turned on while a playlist page is open, then the column appears and a visit starts without reloading Spotify.
 - **AC17** Given any page other than `/playlist/<id>` (Liked Songs, album, artist, search), then no column is added and no backfill runs.
+- **AC37** Genres cells contain no `<a>` element and no click handler; clicking a cell does not navigate.
+- **AC38** (live check) A cell's text stays on one line and ends with an ellipsis when it does not fit; its colour is `var(--spice-subtext)` and its font size equals the Album column's.
 
 Backfill
 - **AC18** When a visit starts, then `PlaylistAPI.getContents` is called with `limit: 100` and increasing `offset` until `totalLength` items are listed, and their entries are read with one `getMany` call.
 - **AC19** `needsLookup(entry, now, rules, audioEnabled, modelReady)` is true exactly when `resolveTrack` would make a MusicBrainz request for that entry under the same inputs. A test runs both over the same fixtures (absent; each source fresh and expired; audio entry with the setting off; `none` with `audioTried: false` with audio on and ready; other `modelVersion`).
 - **AC20** The next pick is the first rendered row, in on-screen order, whose track is a catalogue track not yet tried this visit and for which `needsLookup` is true. When there is none, it is the first such track in playlist order.
-- **AC21** At most one backfill lookup is in flight at any time.
+- **AC21** Across all visits, at most one backfill `resolveTrack` call is outstanding at any time. A new visit waits for the previous visit's outstanding call to finish before starting its first lookup.
 - **AC22** The MusicBrainz queue starts a `backfill` job only when no `current` or `prefetch` job is waiting and at least `musicbrainzBackfillIntervalMs` (6000) has passed since the previous job start of any priority (tested with an injected clock). `current`/`prefetch` jobs keep the existing `musicbrainzBudget` per `musicbrainzWindowMs`.
 - **AC23** Given a `backfill` job waiting, when a `current` or `prefetch` job is enqueued, then the new job starts first.
 - **AC24** Given a `backfill` job waiting, when the song changes, then the job is not dropped.
 - **AC25** Given backfill work waiting or running, when the current track's lookup resolves, then the next-track prefetch still runs (the scheduler's idle wait ignores backfill work).
 - **AC26** Given a quota error pause on a queue, then no `backfill` job starts on it until the pause ends.
-- **AC27** When the page changes, the toggle is turned off or the extension unloads, then no new backfill pick starts. A lookup already in flight completes and its cache write follows the existing rules (including the cache epoch).
+- **AC27** When the page changes, the toggle is turned off or the extension unloads, then no new backfill pick starts. A backfill `resolveTrack` call that has already begun finishes its whole chain, including its queue jobs still waiting, and its cache write follows the existing rules (including the cache epoch).
 - **AC28** Given a visit on playlist A, when playlist B opens, then A's visit stops and B's visit starts.
 - **AC29** Given a track whose backfill lookup ended without a cache write (MusicBrainz unreachable, or a Deezer/decode/classify failure), then it is not picked again in the same visit. A new visit to the playlist may pick it again.
 - **AC30** Given `backfillMaxConsecutiveFailures` (3) backfill lookups in a row with MusicBrainz unreachable, then the visit stops. A reachable outcome in between resets the count.
-- **AC31** When "Clear genre cache" runs during a visit, then every catalogue-track cell shows waiting, lookups in flight write nothing, and the visit starts picking again from AC20 with an empty tried set.
+- **AC31** When "Clear genre cache" runs during a visit, then every cell of a catalogue track with a nonempty artist and title shows waiting, AC7 cells stay empty, lookups begun before the clear write nothing, and the visit starts picking again under AC20 with an empty tried set and a consecutive-failure count of 0.
 - **AC32** Given a rendered row whose track URI is not in the visit's listed tracks, then that track is added to the end of the list.
-- **AC33** Given the audio setting on, the model `Ready` and a MusicBrainz miss for a backfill track, then the Deezer search is enqueued at priority `backfill`, and the result is cached with the same rules as the now-playing row.
+- **AC33** Given a backfill track whose cache decision is a full lookup (not `recheck-musicbrainz`), a known duration, the audio setting on, the model `Ready` and a MusicBrainz miss, then the Deezer search is enqueued at priority `backfill`, and the result is cached with the same rules as the now-playing row. Audio-entry rechecks and tracks with unknown duration keep the existing rules that skip the audio step.
 
 Settings, now-playing and build
 - **AC34** The Genres settings section shows a "Show genres column in playlists" toggle stored under `showGenre:playlistColumn`, on when the key is absent.
 - **AC35** Every acceptance criterion of `docs/specs/2026-10-06-audio-genre-fallback.md` still holds: the existing `genre-pipeline`, `genre-scheduler`, `request-queue` and `genre-cache` tests pass unchanged, except where a test asserts that a song change drops a waiting job, which now holds for `current`/`prefetch` jobs only.
-- **AC36** README has a "## Playlist column" section stating that the column is on by default, that it can be turned off in Settings → Genres, that the backfill sends each track's artist and title to MusicBrainz (and to Deezer when the audio fallback is on), and that the first fill runs at about 600 tracks an hour. `bun run check`, `bun run test` and `bun run build` pass.
+- **AC36** README has a "## Playlist column" section, placed right after "## Audio fallback", stating that the column is on by default, that it can be turned off in Settings → Genres, that the backfill sends each track's artist and title to MusicBrainz (and to Deezer when the audio fallback is on), and that the first fill runs at about 600 tracks an hour. README's "## Previews" section mentions the column. CONTRIBUTING has a note naming `module/tracklist-dom.ts` as the home of the tracklist selectors and pointing to §5.1 of this spec as the check to run after a Spotify update. `bun run check`, `bun run test` and `bun run build` pass.
 
 ### 5.1 Live check (manual, in Spotify)
 
-AC1, AC2, AC10, AC12, AC13, AC15–AC17 and AC28 depend on Spotify's real DOM, so they are confirmed live after unit tests pass:
+AC1, AC2, AC10, AC12, AC13, AC15–AC17, AC28 and AC38 depend on Spotify's real DOM, so they are confirmed live after unit tests pass:
 
 1. Open a 100+ track playlist: the column is aligned with the header at the default window width and at a narrow width (sidebar open, window ≈ 900 px).
 2. Scroll quickly to the end and back: no cell shows another row's genres.
