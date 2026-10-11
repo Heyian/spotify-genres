@@ -25,6 +25,16 @@ export function openIndexedDbStore(dbName = "spotify-genres", storeName = "track
 
   return {
     get: async (uri) => (await request((await objectStore("readonly")).get(uri))) as GenreCacheEntry | undefined,
+    getMany: async (uris) => {
+      const found = new Map<string, GenreCacheEntry>();
+      if (uris.length === 0) return found;
+      const store = await objectStore("readonly"); // one transaction for every key
+      const entries = await Promise.all(uris.map((uri) => request(store.get(uri))));
+      entries.forEach((entry, i) => {
+        if (entry) found.set(uris[i], entry as GenreCacheEntry);
+      });
+      return found;
+    },
     put: async (entry) => void (await request((await objectStore("readwrite")).put(entry))),
     clear: async () => void (await request((await objectStore("readwrite")).clear())),
   };

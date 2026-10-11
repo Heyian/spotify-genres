@@ -176,6 +176,8 @@ export interface SchedulerDeps extends Omit<PipelineDeps, "cacheEpoch"> {
 export interface GenreScheduler {
   songChanged(current: TrackRef | undefined): Promise<void>;
   clearCache(): Promise<void>;
+  /** Column backfill: the full lookup pipeline at `backfill` priority, voided by `clearCache()`. */
+  resolveBackfill(track: TrackRef): Promise<GenreResult>;
 }
 
 /** Latest-wins lookups for the playing track, then a prefetch of the next one once the queues are idle. */
@@ -223,6 +225,7 @@ export function createGenreScheduler(deps: SchedulerDeps): GenreScheduler {
       if (!isCatalogueTrack(upcoming) || upcoming.uri === current?.uri) return; // AC18
       await resolveQuietly(upcoming, "prefetch");
     },
+    resolveBackfill: (track) => resolveTrack(track, pipeline, "backfill"),
     async clearCache() {
       epoch++; // AC38: lookups already in flight write nothing
       await deps.store.clear();

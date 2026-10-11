@@ -29,6 +29,7 @@ function setup(o: Options = {}) {
   let epoch = 0;
   const store: GenreCacheStore = {
     get: (uri) => inner.get(uri),
+    getMany: (uris) => inner.getMany(uris),
     put: async (e) => {
       calls.puts.push(e);
       await inner.put(e);
@@ -262,6 +263,7 @@ test("epoch changed between start and write → no write, result returned (AC38)
 test("store get/put throwing degrades to no cache (Review Focus 5)", async () => {
   const broken: GenreCacheStore = {
     get: async () => { throw new Error("IDB unavailable"); },
+    getMany: async () => { throw new Error("IDB unavailable"); },
     put: async () => { throw new Error("IDB unavailable"); },
     clear: async () => {},
   };

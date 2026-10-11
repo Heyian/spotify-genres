@@ -51,6 +51,8 @@ export function decideCacheAction(entry: GenreCacheEntry | undefined, now: numbe
 
 export interface GenreCacheStore {
   get(uri: string): Promise<GenreCacheEntry | undefined>;
+  /** Only the entries that exist, keyed by URI. */
+  getMany(uris: string[]): Promise<Map<string, GenreCacheEntry>>;
   put(entry: GenreCacheEntry): Promise<void>;
   clear(): Promise<void>;
 }
@@ -60,7 +62,45 @@ export function createMemoryStore(): GenreCacheStore {
   const entries = new Map<string, GenreCacheEntry>();
   return {
     get: async (uri) => entries.get(uri),
+    getMany: async (uris) => {
+      const found = new Map<string, GenreCacheEntry>();
+      for (const uri of uris) {
+        const entry = entries.get(uri);
+        if (entry) found.set(uri, entry);
+      }
+      return found;
+    },
     put: async (entry) => void entries.set(entry.uri, entry),
     clear: async () => entries.clear(),
+  };
+}
+
+export type GenreCacheChange = { kind: "put"; entry: GenreCacheEntry } | { kind: "clear" };
+
+export interface ObservableGenreStore extends GenreCacheStore {
+  subscribe(listener: (change: GenreCacheChange) => void): () => void;
+}
+
+/** Wraps a store so every successful write is announced; a rejected write emits nothing and rethrows. */
+export function withChangeEvents(store: GenreCacheStore): ObservableGenreStore {
+  const listeners = new Set<(change: GenreCacheChange) => void>();
+  const emit = (change: GenreCacheChange) => {
+    for (const listener of [...listeners]) listener(change);
+  };
+  return {
+    get: (uri) => store.get(uri),
+    getMany: (uris) => store.getMany(uris),
+    put: async (entry) => {
+      await store.put(entry);
+      emit({ kind: "put", entry });
+    },
+    clear: async () => {
+      await store.clear();
+      emit({ kind: "clear" });
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => void listeners.delete(listener);
+    },
   };
 }

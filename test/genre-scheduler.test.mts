@@ -43,14 +43,16 @@ function setup(next?: TrackRef) {
   const renders: GenreResult[] = [];
   const shown = () => renders.filter((r) => r.genres[0] !== "<invalidated>");
   const mbCalls: string[] = [];
+  const mbPriorities: string[] = [];
   const holds = new Map<string, Promise<GenreFetchOutcome>>();
   let nextTrack = next;
   const deps: SchedulerDeps = {
     store,
     rules: { musicbrainzTtlDays, audioRecheckDays, notFoundTtlDays, modelVersion: MODEL_VERSION },
     now: () => 1_000_000,
-    musicbrainz: async (t) => {
+    musicbrainz: async (t, priority) => {
       mbCalls.push(t.uri);
+      mbPriorities.push(priority);
       return holds.get(t.uri) ?? { genres: [t.title], reachable: true };
     },
     audioEnabled: () => false,
@@ -62,7 +64,7 @@ function setup(next?: TrackRef) {
     invalidate: () => void renders.push({ genres: ["<invalidated>"], inferred: false }),
     nextTrack: () => nextTrack,
   };
-  return { deps, store, q, renders, shown, mbCalls, holds, setNext: (t: TrackRef | undefined) => void (nextTrack = t) };
+  return { deps, store, q, renders, shown, mbCalls, mbPriorities, holds, setNext: (t: TrackRef | undefined) => void (nextTrack = t) };
 }
 
 test("drops_unrelated_work_on_songchange (AC16)", async () => {
@@ -150,4 +152,24 @@ test("song change invalidates the previous render before any lookup (final revie
   assert.deepEqual(s.renders.map((r) => r.genres[0]), ["<invalidated>", "a", "<invalidated>"]);
   held.resolve({ genres: ["b"], reachable: true });
   await pending;
+});
+
+test("resolve_backfill_uses_backfill_priority (column AC33)", async () => {
+  const s = setup();
+  const result = await createGenreScheduler(s.deps).resolveBackfill(ref("a"));
+  assert.deepEqual(s.mbPriorities, ["backfill"]);
+  assert.deepEqual(result.genres, ["a"]);
+});
+
+test("resolve_backfill_after_clear_writes_nothing (column AC31)", async () => {
+  const s = setup();
+  const held = deferred<GenreFetchOutcome>();
+  s.holds.set("spotify:track:a", held.promise);
+  const scheduler = createGenreScheduler(s.deps);
+  const pending = scheduler.resolveBackfill(ref("a"));
+  await new Promise((r) => setImmediate(r));
+  await scheduler.clearCache();
+  held.resolve({ genres: ["rock"], reachable: true });
+  await pending;
+  assert.equal(await s.store.get("spotify:track:a"), undefined);
 });
