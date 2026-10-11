@@ -174,3 +174,113 @@ test("onIdle_fires_after_last_task", async () => {
   assert.equal(q.isIdle(), true);
   assert.equal(idle, 1);
 });
+
+const bopts = (clock: Clock) => ({ ...opts(clock, 1, 1000), backfillMinIntervalMs: 6000 });
+
+test("backfill_spaced_by_interval (column AC22)", async () => {
+  const clock = new FakeClock();
+  const q = createRequestQueue(bopts(clock));
+  const starts: number[] = [];
+  const all = Array.from({ length: 3 }, (_, i) => q.enqueue(`k${i}`, "backfill", async () => void starts.push(clock.now())));
+  await clock.runAll();
+  await Promise.all(all);
+  assert.deepEqual(starts, [0, 6000, 12000]);
+});
+
+test("backfill_interval_counts_any_priority (column AC22)", async () => {
+  const clock = new FakeClock();
+  const q = createRequestQueue(bopts(clock));
+  const starts: Record<string, number> = {};
+  const c = q.enqueue("c", "current", async () => void (starts.c = clock.now()));
+  const b = q.enqueue("b", "backfill", async () => void (starts.b = clock.now()));
+  await clock.runAll();
+  await Promise.all([c, b]);
+  assert.deepEqual(starts, { c: 0, b: 6000 });
+});
+
+test("current_budget_unchanged_while_backfill_waits (column AC22)", async () => {
+  const clock = new FakeClock();
+  const q = createRequestQueue(bopts(clock));
+  const starts: Record<string, number> = {};
+  const rec = (name: string) => async () => void (starts[name] = clock.now());
+  const all = [q.enqueue("b1", "backfill", rec("b1"))];
+  await clock.advance(0);
+  all.push(q.enqueue("b2", "backfill", rec("b2")));
+  for (const n of ["c1", "c2", "c3"]) all.push(q.enqueue(n, "current", rec(n)));
+  await clock.runAll();
+  await Promise.all(all);
+  assert.deepEqual(starts, { b1: 0, c1: 1000, c2: 2000, c3: 3000, b2: 9000 });
+});
+
+test("foreground_before_backfill (column AC23)", async () => {
+  const clock = new FakeClock();
+  const q = createRequestQueue(bopts(clock));
+  const order: string[] = [];
+  const rec = (name: string) => async () => void order.push(name);
+  const all = [
+    q.enqueue("blocker", "current", rec("blocker")),
+    q.enqueue("x", "backfill", rec("X")),
+    q.enqueue("a", "prefetch", rec("A")),
+    q.enqueue("b", "current", rec("B")),
+  ];
+  await clock.runAll();
+  await Promise.all(all);
+  assert.deepEqual(order, ["blocker", "B", "A", "X"]);
+});
+
+test("drop_skips_backfill (column AC24)", async () => {
+  const clock = new FakeClock();
+  const q = createRequestQueue(bopts(clock));
+  const blocker = q.enqueue("blocker", "current", async () => {});
+  const cur = q.enqueue("c", "current", async () => {});
+  const pre = q.enqueue("p", "prefetch", async () => {});
+  let ran = false;
+  const back = q.enqueue("b", "backfill", async () => void (ran = true));
+  q.dropWhere(() => true);
+  await assert.rejects(cur, DroppedError);
+  await assert.rejects(pre, DroppedError);
+  await clock.runAll();
+  await Promise.all([blocker, back]);
+  assert.equal(ran, true);
+});
+
+test("idle_ignores_backfill (column AC25)", async () => {
+  const clock = new FakeClock();
+  const q = createRequestQueue(bopts(clock));
+  let idle = 0;
+  q.onIdle(() => idle++);
+  const b1 = q.enqueue("b1", "backfill", async () => {});
+  const b2 = q.enqueue("b2", "backfill", async () => {});
+  await clock.advance(0); // b1 done, b2 waiting for its interval
+  assert.equal(q.isIdle(), true);
+  let release!: () => void;
+  const c = q.enqueue("c", "current", () => new Promise<void>((r) => (release = r)));
+  await clock.advance(1000);
+  assert.equal(q.isIdle(), false);
+  const b3 = q.enqueue("b3", "backfill", async () => {});
+  release();
+  await clock.advance(0);
+  await c;
+  assert.equal(q.isIdle(), true);
+  assert.equal(idle, 1);
+  await clock.runAll();
+  await Promise.all([b1, b2, b3]);
+  assert.equal(idle, 1);
+});
+
+test("quota_pause_holds_backfill (column AC26)", async () => {
+  const clock = new FakeClock();
+  const q = createRequestQueue({ ...bopts(clock), backfillMinIntervalMs: 0 });
+  let failed = false;
+  const c = q.enqueue("c", "current", async () => {
+    if (!failed) {
+      failed = true;
+      throw new QuotaError("429");
+    }
+  });
+  let bAt = -1;
+  const b = q.enqueue("b", "backfill", async () => void (bAt = clock.now()));
+  await clock.runAll();
+  await Promise.all([c, b]);
+  assert.ok(bAt >= 5000);
+});
