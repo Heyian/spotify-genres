@@ -1,4 +1,4 @@
-import { decideCacheAction, type CacheRules, type GenreCacheEntry, type GenreCacheStore } from "./genre-cache.ts";
+import { decideCacheAction, type CacheDecision, type CacheRules, type GenreCacheEntry, type GenreCacheStore } from "./genre-cache.ts";
 import type { ScoredGenres } from "./labels.ts";
 import type { GenreFetchOutcome } from "./logic.ts";
 import { DroppedError, type Priority, type RequestQueue } from "./request-queue.ts";
@@ -18,6 +18,8 @@ export const isCatalogueTrack = (t: TrackRef | undefined): t is TrackRef => !!t 
 export interface GenreResult {
   genres: string[];
   inferred: boolean;
+  /** `mb.reachable` once MusicBrainz was called; absent when served from cache or skipped before it. */
+  reachable?: boolean;
 }
 
 export interface PipelineDeps {
@@ -37,6 +39,32 @@ export interface PipelineDeps {
 }
 
 const CLEARED: GenreResult = { genres: [], inferred: false };
+
+/** `decideCacheAction` plus the setting-dependent overrides; shared by `resolveTrack` and the backfill. */
+export function effectiveCacheDecision(
+  entry: GenreCacheEntry | undefined,
+  now: number,
+  rules: CacheRules,
+  audioEnabled: boolean,
+  modelReady: boolean,
+): CacheDecision {
+  const decision = decideCacheAction(entry, now, rules);
+  if (decision.kind === "lookup") return decision;
+  const cached = decision.entry;
+  // Inferred genres only show while the setting is on (AC1).
+  if (cached.source === "audio" && !audioEnabled) return { kind: "lookup" };
+  // "Nothing found" recorded while audio was off: retry now that it can run.
+  if (cached.source === "none" && cached.audioTried === false && audioEnabled && modelReady) return { kind: "lookup" };
+  return decision;
+}
+
+export const needsLookup = (
+  entry: GenreCacheEntry | undefined,
+  now: number,
+  rules: CacheRules,
+  audioEnabled: boolean,
+  modelReady: boolean,
+): boolean => effectiveCacheDecision(entry, now, rules, audioEnabled, modelReady).kind !== "serve";
 
 /** Cache → MusicBrainz → audio for one track (spec §4.2). */
 export async function resolveTrack(track: TrackRef, deps: PipelineDeps, priority: Priority): Promise<GenreResult> {
@@ -61,14 +89,7 @@ export async function resolveTrack(track: TrackRef, deps: PipelineDeps, priority
     cached = undefined;
   }
 
-  let decision = decideCacheAction(cached, deps.now(), deps.rules);
-  if (decision.kind !== "lookup") {
-    const { entry } = decision;
-    // Inferred genres only show while the setting is on (AC1).
-    if (entry.source === "audio" && !deps.audioEnabled()) decision = { kind: "lookup" };
-    // "Nothing found" recorded while audio was off: retry now that it can run.
-    if (entry.source === "none" && entry.audioTried === false && deps.audioEnabled() && deps.modelReady()) decision = { kind: "lookup" };
-  }
+  const decision = effectiveCacheDecision(cached, deps.now(), deps.rules, deps.audioEnabled(), deps.modelReady());
   if (decision.kind === "serve") {
     return { genres: decision.entry.genres, inferred: decision.entry.source === "audio" };
   }
@@ -81,21 +102,23 @@ export async function resolveTrack(track: TrackRef, deps: PipelineDeps, priority
     mb = { genres: [], reachable: false, reason: String(error) };
   }
 
+  const clearedAfterMb: GenreResult = { ...CLEARED, reachable: mb.reachable };
+
   const musicbrainzEntry = (): GenreCacheEntry => ({ uri: track.uri, genres: mb.genres, source: "musicbrainz", checkedAt: deps.now() });
 
   if (decision.kind === "recheck-musicbrainz") {
     const { entry } = decision;
     if (mb.genres.length) {
       await put(musicbrainzEntry());
-      return { genres: mb.genres, inferred: false };
+      return { genres: mb.genres, inferred: false, reachable: mb.reachable };
     }
     if (mb.reachable) await put({ ...entry, checkedAt: deps.now() });
-    return { genres: entry.genres, inferred: true };
+    return { genres: entry.genres, inferred: true, reachable: mb.reachable };
   }
 
   if (mb.genres.length) {
     await put(musicbrainzEntry());
-    return { genres: mb.genres, inferred: false };
+    return { genres: mb.genres, inferred: false, reachable: mb.reachable };
   }
 
   const writeNone = async (audioTried: boolean) => {
@@ -104,30 +127,30 @@ export async function resolveTrack(track: TrackRef, deps: PipelineDeps, priority
 
   if (!deps.audioEnabled()) {
     await writeNone(false);
-    return CLEARED;
+    return clearedAfterMb;
   }
   // Skipped audio step: no `none` entry, so a later play can still try (AC6, Review Focus 2).
-  if (!deps.modelReady() || track.durationS === null) return CLEARED;
+  if (!deps.modelReady() || track.durationS === null) return clearedAfterMb;
 
   let preview: string | null;
   try {
     preview = await deps.findPreview({ ...track, durationS: track.durationS }, priority);
   } catch (error) {
     if (error instanceof DroppedError) throw error;
-    return CLEARED;
+    return clearedAfterMb;
   }
   if (!preview) {
     await writeNone(true);
-    return CLEARED;
+    return clearedAfterMb;
   }
 
   let scored: ScoredGenres;
   try {
     scored = await deps.classifyPreview(preview);
   } catch {
-    return CLEARED; // AC36: the next play retries
+    return clearedAfterMb; // AC36: the next play retries
   }
-  if (!scored.genres.length) return CLEARED;
+  if (!scored.genres.length) return clearedAfterMb;
 
   await put({
     uri: track.uri,
@@ -137,7 +160,7 @@ export async function resolveTrack(track: TrackRef, deps: PipelineDeps, priority
     modelVersion: deps.rules.modelVersion,
     checkedAt: deps.now(),
   });
-  return { genres: scored.genres, inferred: true };
+  return { genres: scored.genres, inferred: true, reachable: mb.reachable };
 }
 
 export interface SchedulerDeps extends Omit<PipelineDeps, "cacheEpoch"> {

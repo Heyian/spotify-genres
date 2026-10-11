@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DAY_MS, MODEL_VERSION, audioRecheckDays, musicbrainzTtlDays, notFoundTtlDays } from "../module/config.ts";
 import { createMemoryStore, type GenreCacheEntry, type GenreCacheStore } from "../module/genre-cache.ts";
-import { resolveTrack, type PipelineDeps, type TrackRef } from "../module/genre-pipeline.ts";
+import { needsLookup, resolveTrack, type PipelineDeps, type TrackRef } from "../module/genre-pipeline.ts";
 import type { GenreFetchOutcome } from "../module/logic.ts";
 import type { ScoredGenres } from "../module/labels.ts";
 import { DroppedError } from "../module/request-queue.ts";
@@ -59,6 +59,12 @@ function setup(o: Options = {}) {
   return { deps, calls, inner, bumpEpoch: () => epoch++ };
 }
 
+/** `resolveTrack` minus `reachable`, which has its own test. */
+const resolveShape = async (...args: Parameters<typeof resolveTrack>) => {
+  const { genres, inferred } = await resolveTrack(...args);
+  return { genres, inferred };
+};
+
 const seeded = async (entry: Omit<GenreCacheEntry, "uri">) => {
   const store = createMemoryStore();
   await store.put({ uri: track.uri, ...entry });
@@ -68,7 +74,7 @@ const seeded = async (entry: Omit<GenreCacheEntry, "uri">) => {
 test("not a catalogue track (AC5)", async () => {
   for (const t of [{ ...track, isLocal: true }, { ...track, isTrack: false }]) {
     const { deps, calls } = setup();
-    assert.deepEqual(await resolveTrack(t, deps, "current"), { genres: [], inferred: false });
+    assert.deepEqual(await resolveShape(t, deps, "current"), { genres: [], inferred: false });
     assert.equal(calls.mb + calls.deezer, 0);
     assert.equal(calls.puts.length, 0);
   }
@@ -82,7 +88,7 @@ test("serve decision: musicbrainz, none and audio entries (AC7, AC11, AC37)", as
   ];
   for (const [entry, expected] of cases) {
     const { deps, calls } = setup({ store: await seeded(entry) });
-    assert.deepEqual(await resolveTrack(track, deps, "current"), expected);
+    assert.deepEqual(await resolveShape(track, deps, "current"), expected);
     assert.equal(calls.mb + calls.deezer + calls.classify, 0);
     assert.equal(calls.puts.length, 0);
   }
@@ -90,21 +96,21 @@ test("serve decision: musicbrainz, none and audio entries (AC7, AC11, AC37)", as
 
 test("MB hit (AC4)", async () => {
   const { deps, calls } = setup({ mb: HIT });
-  assert.deepEqual(await resolveTrack(track, deps, "current"), { genres: ["rock"], inferred: false });
+  assert.deepEqual(await resolveShape(track, deps, "current"), { genres: ["rock"], inferred: false });
   assert.equal(calls.deezer, 0);
   assert.deepEqual(calls.puts.map((p) => [p.source, p.genres, p.checkedAt]), [["musicbrainz", ["rock"], NOW]]);
 });
 
 test("MB reachable miss, audio off (AC1)", async () => {
   const { deps, calls } = setup({ mb: MISS, audio: false });
-  assert.deepEqual(await resolveTrack(track, deps, "current"), { genres: [], inferred: false });
+  assert.deepEqual(await resolveShape(track, deps, "current"), { genres: [], inferred: false });
   assert.equal(calls.deezer, 0);
   assert.deepEqual(calls.puts.map((p) => p.source), ["none"]);
 });
 
 test("MB unreachable, audio off (AC12)", async () => {
   const { deps, calls } = setup({ mb: DOWN, audio: false });
-  assert.deepEqual(await resolveTrack(track, deps, "current"), { genres: [], inferred: false });
+  assert.deepEqual(await resolveShape(track, deps, "current"), { genres: [], inferred: false });
   assert.equal(calls.deezer, 0);
   assert.equal(calls.puts.length, 0);
 });
@@ -112,7 +118,7 @@ test("MB unreachable, audio off (AC12)", async () => {
 test("MB miss/unreachable, audio on, model not ready (AC6)", async () => {
   for (const mb of [MISS, DOWN]) {
     const { deps, calls } = setup({ mb, ready: false });
-    assert.deepEqual(await resolveTrack(track, deps, "current"), { genres: [], inferred: false });
+    assert.deepEqual(await resolveShape(track, deps, "current"), { genres: [], inferred: false });
     assert.equal(calls.deezer, 0);
     assert.equal(calls.puts.length, 0);
   }
@@ -121,7 +127,7 @@ test("MB miss/unreachable, audio on, model not ready (AC6)", async () => {
 test("MB miss/unreachable, audio on + ready, preview classified (AC2, AC3)", async () => {
   for (const mb of [MISS, DOWN]) {
     const { deps, calls } = setup({ mb });
-    assert.deepEqual(await resolveTrack(track, deps, "current"), { genres: AUDIO.genres, inferred: true });
+    assert.deepEqual(await resolveShape(track, deps, "current"), { genres: AUDIO.genres, inferred: true });
     assert.equal(calls.deezer, 1);
     assert.equal(calls.classify, 1);
     assert.deepEqual(calls.puts, [
@@ -132,48 +138,48 @@ test("MB miss/unreachable, audio on + ready, preview classified (AC2, AC3)", asy
 
 test("no candidate / no preview, MB reachable miss → none (AC21)", async () => {
   const { deps, calls } = setup({ mb: MISS, preview: null });
-  assert.deepEqual(await resolveTrack(track, deps, "current"), { genres: [], inferred: false });
+  assert.deepEqual(await resolveShape(track, deps, "current"), { genres: [], inferred: false });
   assert.equal(calls.classify, 0);
   assert.deepEqual(calls.puts.map((p) => p.source), ["none"]);
 });
 
 test("no candidate / no preview, MB unreachable → no write (AC12, AC21)", async () => {
   const { deps, calls } = setup({ mb: DOWN, preview: null });
-  assert.deepEqual(await resolveTrack(track, deps, "current"), { genres: [], inferred: false });
+  assert.deepEqual(await resolveShape(track, deps, "current"), { genres: [], inferred: false });
   assert.equal(calls.deezer, 1);
   assert.equal(calls.puts.length, 0);
 });
 
 test("classify throws → cleared, nothing written (AC36)", async () => {
   const { deps, calls } = setup({ mb: MISS, classify: new Error("decode failed") });
-  assert.deepEqual(await resolveTrack(track, deps, "current"), { genres: [], inferred: false });
+  assert.deepEqual(await resolveShape(track, deps, "current"), { genres: [], inferred: false });
   assert.equal(calls.classify, 1);
   assert.equal(calls.puts.length, 0);
 });
 
 test("findPreview failure other than drop → cleared, nothing written", async () => {
   const { deps, calls } = setup({ mb: MISS, preview: new Error("JSONP timed out") });
-  assert.deepEqual(await resolveTrack(track, deps, "current"), { genres: [], inferred: false });
+  assert.deepEqual(await resolveShape(track, deps, "current"), { genres: [], inferred: false });
   assert.equal(calls.puts.length, 0);
 });
 
 test("missing duration skips audio and writes no none (Review Focus 2)", async () => {
   const t = { ...track, durationS: null };
   const miss = setup({ mb: MISS });
-  assert.deepEqual(await resolveTrack(t, miss.deps, "current"), { genres: [], inferred: false });
+  assert.deepEqual(await resolveShape(t, miss.deps, "current"), { genres: [], inferred: false });
   assert.equal(miss.calls.mb, 1);
   assert.equal(miss.calls.deezer, 0);
   assert.equal(miss.calls.puts.length, 0);
 
   const hit = setup({ mb: HIT });
-  assert.deepEqual(await resolveTrack(t, hit.deps, "current"), { genres: ["rock"], inferred: false });
+  assert.deepEqual(await resolveShape(t, hit.deps, "current"), { genres: ["rock"], inferred: false });
   assert.deepEqual(hit.calls.puts.map((p) => p.source), ["musicbrainz"]);
 });
 
 test("empty artist or title: no lookup at all, nothing written (Review Focus 2, upstream behaviour)", async () => {
   for (const t of [{ ...track, artist: " " }, { ...track, title: "" }]) {
     const { deps, calls } = setup({ mb: HIT });
-    assert.deepEqual(await resolveTrack(t, deps, "current"), { genres: [], inferred: false });
+    assert.deepEqual(await resolveShape(t, deps, "current"), { genres: [], inferred: false });
     assert.equal(calls.mb + calls.deezer, 0);
     assert.equal(calls.puts.length, 0);
   }
@@ -190,7 +196,7 @@ test("none written while audio was off is retried once audio is on and ready (fi
   assert.equal(stillOff.calls.mb, 0); // served from cache
 
   const on = setup({ mb: MISS, store });
-  assert.deepEqual(await resolveTrack(track, on.deps, "current"), { genres: AUDIO.genres, inferred: true });
+  assert.deepEqual(await resolveShape(track, on.deps, "current"), { genres: AUDIO.genres, inferred: true });
   assert.equal(on.calls.deezer, 1);
 });
 
@@ -207,7 +213,7 @@ test("none written after the audio step ran is served while fresh (AC11, AC21)",
 test("audio entries are not shown while the setting is off (AC1, final review)", async () => {
   const fresh = { genres: ["darkwave"], scores: [0.3], modelVersion: MODEL_VERSION, source: "audio" as const, checkedAt: NOW };
   const { deps, calls } = setup({ mb: MISS, audio: false, store: await seeded(fresh) });
-  assert.deepEqual(await resolveTrack(track, deps, "current"), { genres: [], inferred: false });
+  assert.deepEqual(await resolveShape(track, deps, "current"), { genres: [], inferred: false });
   assert.equal(calls.mb, 1);
   assert.equal(calls.deezer, 0);
 });
@@ -216,21 +222,21 @@ const staleAudio = { genres: ["darkwave"], scores: [0.3], modelVersion: MODEL_VE
 
 test("recheck-musicbrainz + MB hit replaces the entry (AC9)", async () => {
   const { deps, calls } = setup({ mb: HIT, store: await seeded(staleAudio) });
-  assert.deepEqual(await resolveTrack(track, deps, "current"), { genres: ["rock"], inferred: false });
+  assert.deepEqual(await resolveShape(track, deps, "current"), { genres: ["rock"], inferred: false });
   assert.equal(calls.deezer, 0);
   assert.deepEqual(calls.puts.map((p) => [p.source, p.genres]), [["musicbrainz", ["rock"]]]);
 });
 
 test("recheck-musicbrainz + reachable miss refreshes checkedAt (AC9)", async () => {
   const { deps, calls } = setup({ mb: MISS, store: await seeded(staleAudio) });
-  assert.deepEqual(await resolveTrack(track, deps, "current"), { genres: ["darkwave"], inferred: true });
+  assert.deepEqual(await resolveShape(track, deps, "current"), { genres: ["darkwave"], inferred: true });
   assert.equal(calls.deezer, 0);
   assert.deepEqual(calls.puts, [{ uri: track.uri, ...staleAudio, checkedAt: NOW }]);
 });
 
 test("recheck-musicbrainz + unreachable leaves the entry unchanged (AC9)", async () => {
   const { deps, calls, inner } = setup({ mb: DOWN, store: await seeded(staleAudio) });
-  assert.deepEqual(await resolveTrack(track, deps, "current"), { genres: ["darkwave"], inferred: true });
+  assert.deepEqual(await resolveShape(track, deps, "current"), { genres: ["darkwave"], inferred: true });
   assert.equal(calls.deezer, 0);
   assert.equal(calls.puts.length, 0);
   assert.equal((await inner.get(track.uri))?.checkedAt, staleAudio.checkedAt);
@@ -249,7 +255,7 @@ test("epoch changed between start and write → no write, result returned (AC38)
     s.bumpEpoch();
     return original(t, p);
   };
-  assert.deepEqual(await resolveTrack(track, s.deps, "current"), { genres: ["rock"], inferred: false });
+  assert.deepEqual(await resolveShape(track, s.deps, "current"), { genres: ["rock"], inferred: false });
   assert.equal(s.calls.puts.length, 0);
 });
 
@@ -260,12 +266,39 @@ test("store get/put throwing degrades to no cache (Review Focus 5)", async () =>
     clear: async () => {},
   };
   const { deps, calls } = setup({ mb: HIT, store: broken });
-  assert.deepEqual(await resolveTrack(track, deps, "current"), { genres: ["rock"], inferred: false });
+  assert.deepEqual(await resolveShape(track, deps, "current"), { genres: ["rock"], inferred: false });
   assert.equal(calls.mb, 1);
 });
 
 test("expired other-model audio entry triggers a full lookup (AC10)", async () => {
   const { deps, calls } = setup({ mb: MISS, store: await seeded({ ...staleAudio, modelVersion: "old", checkedAt: NOW }) });
-  assert.deepEqual(await resolveTrack(track, deps, "current"), { genres: AUDIO.genres, inferred: true });
+  assert.deepEqual(await resolveShape(track, deps, "current"), { genres: AUDIO.genres, inferred: true });
   assert.equal(calls.deezer, 1);
+});
+
+const fixtures: Array<[string, GenreCacheEntry | undefined, { audio: boolean; ready: boolean }]> = [
+  ["absent", undefined, { audio: true, ready: true }],
+  ["mb fresh", { uri: track.uri, genres: ["rock"], source: "musicbrainz", checkedAt: NOW - DAY_MS }, { audio: true, ready: true }],
+  ["mb expired", { uri: track.uri, genres: ["rock"], source: "musicbrainz", checkedAt: NOW - musicbrainzTtlDays * DAY_MS }, { audio: true, ready: true }],
+  ["audio fresh", { uri: track.uri, genres: ["darkwave"], source: "audio", modelVersion: MODEL_VERSION, checkedAt: NOW - DAY_MS }, { audio: true, ready: true }],
+  ["audio expired", { uri: track.uri, genres: ["darkwave"], source: "audio", modelVersion: MODEL_VERSION, checkedAt: NOW - audioRecheckDays * DAY_MS }, { audio: true, ready: true }],
+  ["audio, setting off", { uri: track.uri, genres: ["darkwave"], source: "audio", modelVersion: MODEL_VERSION, checkedAt: NOW - DAY_MS }, { audio: false, ready: false }],
+  ["audio, other model", { uri: track.uri, genres: ["darkwave"], source: "audio", modelVersion: "old", checkedAt: NOW - DAY_MS }, { audio: true, ready: true }],
+  ["none fresh", { uri: track.uri, genres: [], source: "none", audioTried: true, checkedAt: NOW - DAY_MS }, { audio: true, ready: true }],
+  ["none expired", { uri: track.uri, genres: [], source: "none", audioTried: true, checkedAt: NOW - notFoundTtlDays * DAY_MS }, { audio: true, ready: true }],
+  ["none, audio not tried, now ready", { uri: track.uri, genres: [], source: "none", audioTried: false, checkedAt: NOW - DAY_MS }, { audio: true, ready: true }],
+];
+for (const [name, entry, flags] of fixtures) {
+  test(`needs_lookup_matches_resolve: ${name} (column AC19)`, async () => {
+    const store = createMemoryStore();
+    if (entry) await store.put(entry);
+    const s = setup({ store, audio: flags.audio, ready: flags.ready, mb: HIT });
+    await resolveTrack(track, s.deps, "current");
+    assert.equal(needsLookup(entry, NOW, s.deps.rules, flags.audio, flags.ready), s.calls.mb === 1);
+  });
+}
+
+test("result_carries_reachability", async () => {
+  assert.equal((await resolveTrack(track, setup({ mb: DOWN, audio: false }).deps, "current")).reachable, false);
+  assert.equal((await resolveTrack(track, setup({ mb: MISS, audio: false }).deps, "current")).reachable, true);
 });

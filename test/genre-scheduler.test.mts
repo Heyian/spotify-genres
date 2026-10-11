@@ -84,7 +84,7 @@ test("stale_lookup_not_rendered (AC39)", async () => {
   await scheduler.songChanged(ref("b"));
   held.resolve({ genres: ["late"], reachable: true });
   await first;
-  assert.deepEqual(s.shown(), [{ genres: ["b"], inferred: false }]);
+  assert.deepEqual(s.shown(), [{ genres: ["b"], inferred: false, reachable: true }]);
 });
 
 test("prefetch_after_idle_no_render (AC18)", async () => {
@@ -130,7 +130,7 @@ test("lookup_started_before_clear_writes_nothing (AC38)", async () => {
   held.resolve({ genres: ["rock"], reachable: true });
   await pending;
   assert.equal(await s.store.get("spotify:track:a"), undefined);
-  assert.deepEqual(s.shown(), [{ genres: ["rock"], inferred: false }]);
+  assert.deepEqual(s.shown(), [{ genres: ["rock"], inferred: false, reachable: true }]);
 });
 
 test("no current track clears the row", async () => {
