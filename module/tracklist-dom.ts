@@ -3,6 +3,8 @@
  *
  * Selectors and attribute behaviour were probed live on Spotify 1.2.96.518 (2026-10-11):
  * - The list root is `.main-trackList-trackList` with an inline `--grid-template-columns` and `aria-colcount`.
+ * - A playlist page has two such grids: the playlist's own (`data-testid="playlist-tracklist"`) and the
+ *   "Recommended" one (`data-testid="track-list"`, also used by album and Liked Songs pages). Only the first is ours.
  * - Both the wide and narrow templates contain `[last]`; narrow drops `[var1]`/`[var2]`.
  * - Hidden columns stay in the DOM: rows keep 5 `[aria-colindex]` cells at every width, and
  *   `.main-trackList-rowSectionEnd` keeps `aria-colindex="5"` while `aria-colcount` is 3 when narrow.
@@ -56,7 +58,7 @@ export function findRowUri(props: unknown, maxDepth = 10): string | null {
 }
 
 export const SELECTORS = {
-  list: ".main-trackList-trackList",
+  list: '.main-trackList-trackList[data-testid="playlist-tracklist"]',
   headerRow: ".main-trackList-trackListHeaderRow",
   row: ".main-trackList-trackListRow",
   sectionEnd: ".main-trackList-rowSectionEnd",
