@@ -29,3 +29,22 @@
 		margin: 0 2px;
 	}
 }
+
+[data-genres-col] {
+	[data-genres-cell] {
+		// The Album column's size is not visible in this repo; inherit from the row section.
+		font-size: inherit;
+		color: var(--spice-subtext);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.spotify-genres-cell--inferred {
+		font-style: italic;
+	}
+
+	.spotify-genres-cell--waiting {
+		opacity: 0.5;
+	}
+}

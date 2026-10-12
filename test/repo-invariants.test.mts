@@ -50,7 +50,7 @@ test("research_pointer (AC33)", () => {
 });
 
 test("column_code_renders_text_only (column AC9, AC37)", () => {
-  for (const file of ["module/tracklist-dom.ts", "module/column-cell.ts"]) {
+  for (const file of ["module/tracklist-dom.ts", "module/column-cell.ts", "module/playlist-column.ts"]) {
     const source = read(file);
     for (const banned of ["innerHTML", "insertAdjacentHTML", 'createElement("a")', '"click"']) {
       assert.ok(!source.includes(banned), `${file} contains ${banned}`);
