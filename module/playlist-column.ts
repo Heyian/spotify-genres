@@ -201,8 +201,10 @@ export function startPlaylistColumn(deps: PlaylistColumnDeps): { stop(): void } 
   }
 
   function pageChanged(pathname: string): void {
-    leaveVisit();
     const uri = playlistUriFromPath(pathname);
+    // Same playlist (re-click, or a `replace` on the same path): keep the visit, cells and tried set.
+    if (uri && uri === playlistUri) return;
+    leaveVisit();
     if (!uri) {
       playlistUri = null;
       uninstallColumn(document);
