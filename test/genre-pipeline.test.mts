@@ -21,6 +21,8 @@ interface Options {
   preview?: string | null | Error;
   classify?: ScoredGenres | Error;
   store?: GenreCacheStore;
+  /** Records the priority each Deezer lookup was called with. */
+  previewPriorities?: string[];
 }
 
 function setup(o: Options = {}) {
@@ -43,7 +45,8 @@ function setup(o: Options = {}) {
     musicbrainz: async () => (calls.mb++, o.mb ?? MISS),
     audioEnabled: () => o.audio ?? true,
     modelReady: () => o.ready ?? true,
-    findPreview: async () => {
+    findPreview: async (_track, priority) => {
+      o.previewPriorities?.push(priority);
       calls.deezer++;
       const p = o.preview === undefined ? "https://cdn/p.mp3" : o.preview;
       if (p instanceof Error) throw p;
@@ -135,6 +138,14 @@ test("MB miss/unreachable, audio on + ready, preview classified (AC2, AC3)", asy
       { uri: track.uri, genres: AUDIO.genres, scores: AUDIO.scores, source: "audio", modelVersion: MODEL_VERSION, checkedAt: NOW },
     ]);
   }
+});
+
+test("backfill priority reaches the Deezer lookup (column AC33)", async () => {
+  const previewPriorities: string[] = [];
+  const { deps, calls } = setup({ previewPriorities });
+  await resolveTrack(track, deps, "backfill");
+  assert.equal(calls.deezer, 1);
+  assert.deepEqual(previewPriorities, ["backfill"]);
 });
 
 test("no candidate / no preview, MB reachable miss → none (AC21)", async () => {
