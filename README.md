@@ -51,7 +51,12 @@ git clone https://github.com/Heyian/spotify-genres
 cd spotify-genres
 bun install
 bun run build
+```
+
+Start Spotify with `spotify --remote-debugging-port=9229` first. The install pushes the module into the running client over that port and fails with `fetch failed` if Spotify is closed:
+
+```sh
 bunx spicetify-kit install dist/spotify-genres@*
 ```
 
-Then restart Spotify. If the upstream `genres` extension is also installed, remove it to avoid two genre rows.
+Pass `--port <n>` if you use a different port. If the upstream `genres` extension is also installed, remove it to avoid two genre rows.

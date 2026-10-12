@@ -163,7 +163,7 @@ None — the repo has no `CONTEXT.md`. Terms used in this spec: **column**, **ba
 
 ## 9. Manual Operator Steps
 
-1. **Install the build in Spotify** (after the column wiring lands): `bun run build && bunx spicetify-kit install dist/spotify-genres@*`, then restart Spotify. To let the agent run the live check (§5.1) itself, start Spotify with DevTools remote debugging as in the 2026-10-06 live probes; otherwise run §5.1 yourself and report what fails.
+1. **Install the build in Spotify** (after the column wiring lands): start Spotify with `spotify --remote-debugging-port=9229` (`install` pushes into the running client over that port and fails with `fetch failed` if Spotify is closed), then run `bun run build && bunx spicetify-kit install dist/spotify-genres@*` (add `--port <n>` for another port). To let the agent run the live check (§5.1) itself, start Spotify with DevTools remote debugging as in the 2026-10-06 live probes; otherwise run §5.1 yourself and report what fails.
 
 ## 10. Documentation Updates
 

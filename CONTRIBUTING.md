@@ -26,6 +26,8 @@ bun run dev
 
 ## Build and install
 
+`install` pushes the build into a running Spotify, so start it first with `spotify --remote-debugging-port=9229` (pass `--port <n>` to `install` for another port).
+
 ```bash
 bun run build
 bunx spicetify-kit install dist/spotify-genres@*
