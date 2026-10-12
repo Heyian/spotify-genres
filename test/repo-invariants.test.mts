@@ -57,3 +57,19 @@ test("column_code_renders_text_only (column AC9, AC37)", () => {
     }
   }
 });
+
+test("readme_playlist_column (column AC36)", () => {
+  const readme = read("README.md");
+  const headings = [...readme.matchAll(/^## .*$/gm)].map((m) => m[0]);
+  const audio = headings.indexOf("## Audio fallback");
+  assert.ok(audio >= 0, "README has a ## Audio fallback section");
+  assert.equal(headings[audio + 1], "## Playlist column", "Playlist column follows Audio fallback");
+  const column = readme.match(/^## Playlist column\n([\s\S]*?)(?=^## |(?![\s\S]))/m);
+  assert.ok(column, "README has a ## Playlist column section");
+  for (const needle of ["Settings", "MusicBrainz", "Deezer", "600"]) assert.ok(column[1].includes(needle), needle);
+  const previews = readme.match(/^## Previews\n([\s\S]*?)(?=^## |(?![\s\S]))/m);
+  assert.ok(previews, "README has a ## Previews section");
+  assert.ok(previews[1].includes("column"), "Previews mentions the column");
+  const contributing = read("CONTRIBUTING.md");
+  for (const needle of ["module/tracklist-dom.ts", "2026-10-10-playlist-genres-column.md"]) assert.ok(contributing.includes(needle), needle);
+});

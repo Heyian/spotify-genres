@@ -31,6 +31,10 @@ bun run build
 bunx spicetify-kit install dist/spotify-genres@*
 ```
 
+## Checking the playlist column
+
+Spotify tracklist selectors live in `module/tracklist-dom.ts`. After a Spotify update, run the live check in §5.1 of `docs/specs/2026-10-10-playlist-genres-column.md`.
+
 ## Evaluation workflow
 
 The evaluation report measures how often the audio fallback finds a Deezer preview and how often its top 3 styles match your own labels. It needs `ffmpeg` on your `PATH` and the model mirror folder.

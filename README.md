@@ -14,6 +14,8 @@ If available, clicking on a genre will bring the Spotify-made playlist with rela
 
 ![spotify-made playlist](https://cdn.vexcited.com/uploads/537193777-b048c96f-8929-4af2-83fe-8e84b0b3b4d3.png)
 
+Playlist pages also show a Genres column in the tracklist (see [Playlist column](#playlist-column)).
+
 ## Audio fallback
 
 Genres come from MusicBrainz. When MusicBrainz has no genre for the playing track, or cannot be reached, the extension can infer up to three genres from the track's audio instead. Inferred genres are shown in italics with a "≈" prefix, and hovering one shows where it came from.
@@ -29,6 +31,14 @@ What leaves your machine when it is on:
 Inference runs inside Spotify with ONNX Runtime Web; nothing is sent to a hosted model. The model is MTG's Discogs-EffNet, licensed [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) (non-commercial use only).
 
 "Clear genre cache" in the same settings section forgets every cached lookup, so the next play of each track looks it up again.
+
+## Playlist column
+
+Playlist pages get a "Genres" column in the tracklist. It is **on by default**. Turn it off in Settings → **Genres** → "Show genres column in playlists".
+
+The column is read-only and only appears on playlist pages. Cells show cached genres; tracks not looked up yet show "…", and tracks with no genres show "—".
+
+Tracks without a cached result are filled in the background. The **artist and title of each track are sent to MusicBrainz** (and to Deezer when the audio fallback is on). To respect MusicBrainz's rate limit, the first fill runs at about 600 tracks an hour. Results are cached, so later visits are fast.
 
 ## Requirements
 
