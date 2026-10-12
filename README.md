@@ -7,12 +7,16 @@
 With a [Spicetify](https://github.com/spicetify/spicetify-cli) build that supports v3 modules:
 
 ```sh
-spicetify pkg install spotify-genres https://github.com/Heyian/spotify-genres/releases/latest/download/spotify-genres.zip
+spicetify pkg install spotify-genres@0.2.0 https://github.com/Heyian/spotify-genres/releases/download/0.2.0/spotify-genres.zip
+spicetify pkg enable spotify-genres@0.2.0
+spicetify apply
 ```
 
-This fork is not in the Spicetify store, so the command installs the release zip directly; the CLI warns that the download is not verified by the store. To pin a version, replace `latest/download` with `download/<version>`, for example `download/0.2.0`. Each release also lists the zip's SHA-256.
+`pkg install` downloads the zip into the Spicetify store, `pkg enable` turns it on, and `spicetify apply` adds it to Spotify and restarts Spotify. For another version, use the command on its [release page](https://github.com/Heyian/spotify-genres/releases). The version appears twice: in the id, which the CLI requires as `name@version`, and in the URL.
 
-If the upstream `genres` extension is installed too, remove it (`spicetify pkg delete genres`) to avoid two genre rows.
+This fork is not in the Spicetify store, so the CLI installs the release zip directly and warns that nothing verifies the download. Each release lists the zip's SHA-256 so you can compare it with the one the CLI prints.
+
+If the upstream `genres` extension is installed too, disable or remove it in the Spicetify store to avoid two genre rows.
 
 ## Credits
 

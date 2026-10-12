@@ -61,7 +61,9 @@ jobs:
             Install or update:
 
             ```sh
-            spicetify pkg install spotify-genres https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/spotify-genres.zip
+            spicetify pkg install spotify-genres@${{ github.ref_name }} https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/spotify-genres.zip
+            spicetify pkg enable spotify-genres@${{ github.ref_name }}
+            spicetify apply
             ```
 
             Fork of [genres](https://code.vexcited.com/spicetify/genres) by Vexcited.
