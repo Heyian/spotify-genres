@@ -1,3 +1,19 @@
+# spotify-genres
+
+> **This is a fork** of [genres](https://code.vexcited.com/spicetify/genres) by [Vexcited](https://code.vexcited.com/Vexcited). It adds an audio fallback for tracks MusicBrainz has no genres for, and a Genres column on playlist pages. For the original extension, go to [code.vexcited.com/spicetify/genres](https://code.vexcited.com/spicetify/genres).
+
+## Install
+
+With a [Spicetify](https://github.com/spicetify/spicetify-cli) build that supports v3 modules:
+
+```sh
+spicetify pkg install spotify-genres https://github.com/Heyian/spotify-genres/releases/latest/download/spotify-genres.zip
+```
+
+This fork is not in the Spicetify store, so the command installs the release zip directly; the CLI warns that the download is not verified by the store. To pin a version, replace `latest/download` with `download/<version>`, for example `download/0.2.0`. Each release also lists the zip's SHA-256.
+
+If the upstream `genres` extension is installed too, remove it (`spicetify pkg delete genres`) to avoid two genre rows.
+
 ## Credits
 
 This extension is a fork of [genres](https://code.vexcited.com/spicetify/genres) by Mikkel ALMONTE--RINGAUD ([Vexcited](https://code.vexcited.com/Vexcited)), released under the MIT licence. All credit for the original extension goes to them.
@@ -45,6 +61,8 @@ Tracks without a cached result are filled in the background. The **artist and ti
 A [Spicetify](https://github.com/spicetify/spicetify-cli) build with v3 module support.
 
 ## Install from a local build
+
+For development. Releases are built by `.github/workflows/release.yml` when a version tag is pushed.
 
 ```sh
 git clone https://github.com/Heyian/spotify-genres

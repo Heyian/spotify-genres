@@ -1,0 +1,68 @@
+name: Release
+
+# Push a version tag that matches module/metadata.json (e.g. `0.2.0`) to build the
+# module and publish `spotify-genres.zip` for `spicetify pkg install`.
+on:
+  push:
+    tags:
+      - "*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # test/repo-invariants.test.mts diffs against a local `main`.
+      - name: Create local main
+        run: git branch --force main origin/main
+
+      - name: Check the tag matches the module version
+        run: |
+          version=$(jq -r .version module/metadata.json)
+          pkg=$(jq -r .version package.json)
+          if [ "$version" != "$GITHUB_REF_NAME" ] || [ "$pkg" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME, module/metadata.json $version, package.json $pkg"
+            exit 1
+          fi
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Check and test
+        run: |
+          bun run check
+          bun run test
+
+      - name: Build
+        run: bun run build
+
+      - name: Package
+        run: |
+          mkdir release
+          (cd "dist/spotify-genres@$GITHUB_REF_NAME" && zip -qr "$GITHUB_WORKSPACE/release/spotify-genres.zip" . -x '*.map')
+          (cd release && sha256sum spotify-genres.zip > spotify-genres.zip.sha256)
+          cat release/spotify-genres.zip.sha256
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            release/spotify-genres.zip
+            release/spotify-genres.zip.sha256
+          body: |
+            Install or update:
+
+            ```sh
+            spicetify pkg install spotify-genres https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/spotify-genres.zip
+            ```
+
+            Fork of [genres](https://code.vexcited.com/spicetify/genres) by Vexcited.
+          generate_release_notes: true
