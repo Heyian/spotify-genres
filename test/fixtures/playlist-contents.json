@@ -1,0 +1,476 @@
+{
+  "_note": "Recorded live from Spotify 1.2.96.518 via PlaylistAPI.getContents(uri,{limit:2,offset:0}); names/users/ids replaced with placeholders. No local-file item was found in the first 40 playlists scanned.",
+  "response": {
+    "keys": [
+      "items",
+      "offset",
+      "limit",
+      "totalLength"
+    ],
+    "totalLength": 246
+  },
+  "track": {
+    "uid": "0000000000000000",
+    "playIndex": null,
+    "addedAt": "2026-07-13T04:39:58.000Z",
+    "addedBy": {
+      "type": "user",
+      "uri": "spotify:user:placeholder-user",
+      "username": "placeholder-user",
+      "displayName": "Placeholder User",
+      "images": []
+    },
+    "formatListAttributes": {},
+    "type": "track",
+    "uri": "spotify:track:PlaceholderT1000000000",
+    "name": "Placeholder Track",
+    "album": {
+      "type": "album",
+      "uri": "spotify:album:PlaceholderB1000000000",
+      "name": "Placeholder Album",
+      "artist": {
+        "type": "artist",
+        "uri": "spotify:artist:PlaceholderA1000000000",
+        "name": "Placeholder Artist"
+      },
+      "images": [
+        {
+          "url": "spotify:image:placeholder",
+          "label": "standard"
+        },
+        {
+          "url": "spotify:image:placeholder",
+          "label": "small"
+        },
+        {
+          "url": "spotify:image:placeholder",
+          "label": "large"
+        },
+        {
+          "url": "spotify:image:placeholder",
+          "label": "xlarge"
+        }
+      ]
+    },
+    "artists": [
+      {
+        "type": "artist",
+        "uri": "spotify:artist:PlaceholderA1000000000",
+        "name": "Placeholder Artist 1"
+      }
+    ],
+    "release": {
+      "isoString": "2021-09-27T00:00:00.000Z",
+      "precision": "DAY"
+    },
+    "discNumber": 1,
+    "trackNumber": 1,
+    "duration": {
+      "milliseconds": 185000
+    },
+    "isExplicit": false,
+    "isLocal": false,
+    "isPlayable": true,
+    "is19PlusOnly": false,
+    "hasAssociatedVideo": false,
+    "hasAssociatedAudio": false,
+    "isBanned": false,
+    "formats": [
+      1,
+      4
+    ]
+  },
+  "episode": {
+    "uid": "0000000000000000",
+    "playIndex": null,
+    "addedAt": "2025-04-22T19:07:52.000Z",
+    "addedBy": {
+      "type": "user",
+      "uri": "spotify:user:placeholder-user",
+      "username": "placeholder-user",
+      "displayName": "Placeholder User",
+      "images": [
+        {
+          "url": "https://example.invalid/image",
+          "label": "standard"
+        },
+        {
+          "url": "https://example.invalid/image",
+          "label": "small"
+        }
+      ]
+    },
+    "formatListAttributes": {
+      "decision_id": "placeholder"
+    },
+    "type": "episode",
+    "uri": "spotify:episode:PlaceholderE1000000000",
+    "name": "Placeholder Episode",
+    "description": "Placeholder description",
+    "duration": {
+      "milliseconds": 1292000
+    },
+    "playedState": {
+      "timeLeft": {
+        "milliseconds": 1248000
+      },
+      "state": "COMPLETED"
+    },
+    "images": [
+      {
+        "url": "spotify:image:placeholder",
+        "label": "standard"
+      },
+      {
+        "url": "spotify:image:placeholder",
+        "label": "small"
+      },
+      {
+        "url": "spotify:image:placeholder",
+        "label": "large"
+      }
+    ],
+    "isExplicit": false,
+    "is19PlusOnly": false,
+    "contentRatings": [],
+    "isPlayable": true,
+    "languages": [],
+    "release": {
+      "isoString": "2025-03-04T15:00:00.000Z",
+      "precision": "DAY"
+    },
+    "show": {
+      "type": "show",
+      "uri": "spotify:show:PlaceholderS1000000000",
+      "name": "Placeholder Show",
+      "publisher": "",
+      "images": [],
+      "mediaType": 1
+    },
+    "podcastSubscription": {
+      "isPaywalled": false,
+      "isUserSubscribed": false
+    },
+    "isShareable": true,
+    "gatedEntityRelations": {
+      "entitiesWithValueProps": []
+    },
+    "dynamicColors": {
+      "encoreBaseSetTextColor": {
+        "rgb": {
+          "r": 255,
+          "g": 156,
+          "b": 203,
+          "a": 255
+        },
+        "hsl": {
+          "h": 332,
+          "s": 1,
+          "l": 0.8058823529411765
+        },
+        "hsv": {
+          "h": 332,
+          "s": 0.388235294117647,
+          "v": 1
+        },
+        "a": 1
+      },
+      "minContrast": {
+        "backgroundBase": {
+          "rgb": {
+            "r": 232,
+            "g": 72,
+            "b": 152,
+            "a": 255
+          },
+          "hsl": {
+            "h": 330,
+            "s": 0.7766990291262136,
+            "l": 0.596078431372549
+          },
+          "hsv": {
+            "h": 330,
+            "s": 0.6896551724137931,
+            "v": 0.9098039215686274
+          },
+          "a": 1
+        },
+        "backgroundTintedBase": {
+          "rgb": {
+            "r": 199,
+            "g": 36,
+            "b": 124,
+            "a": 255
+          },
+          "hsl": {
+            "h": 328,
+            "s": 0.6936170212765956,
+            "l": 0.4607843137254902
+          },
+          "hsv": {
+            "h": 328,
+            "s": 0.8190954773869346,
+            "v": 0.7803921568627451
+          },
+          "a": 1
+        },
+        "textBase": {
+          "rgb": {
+            "r": 255,
+            "g": 255,
+            "b": 255,
+            "a": 255
+          },
+          "hsl": {
+            "h": 0,
+            "s": 0,
+            "l": 1
+          },
+          "hsv": {
+            "h": 0,
+            "s": 0,
+            "v": 1
+          },
+          "a": 1
+        },
+        "textBrightAccent": {
+          "rgb": {
+            "r": 255,
+            "g": 255,
+            "b": 255,
+            "a": 255
+          },
+          "hsl": {
+            "h": 0,
+            "s": 0,
+            "l": 1
+          },
+          "hsv": {
+            "h": 0,
+            "s": 0,
+            "v": 1
+          },
+          "a": 1
+        },
+        "textSubdued": {
+          "rgb": {
+            "r": 255,
+            "g": 255,
+            "b": 255,
+            "a": 255
+          },
+          "hsl": {
+            "h": 0,
+            "s": 0,
+            "l": 1
+          },
+          "hsv": {
+            "h": 0,
+            "s": 0,
+            "v": 1
+          },
+          "a": 1
+        }
+      },
+      "highContrast": {
+        "backgroundBase": {
+          "rgb": {
+            "r": 153,
+            "g": 0,
+            "b": 89,
+            "a": 255
+          },
+          "hsl": {
+            "h": 325,
+            "s": 1,
+            "l": 0.3
+          },
+          "hsv": {
+            "h": 325,
+            "s": 1,
+            "v": 0.6
+          },
+          "a": 1
+        },
+        "backgroundTintedBase": {
+          "rgb": {
+            "r": 94,
+            "g": 0,
+            "b": 50,
+            "a": 255
+          },
+          "hsl": {
+            "h": 328,
+            "s": 1,
+            "l": 0.1843137254901961
+          },
+          "hsv": {
+            "h": 328,
+            "s": 1,
+            "v": 0.3686274509803922
+          },
+          "a": 1
+        },
+        "textBase": {
+          "rgb": {
+            "r": 255,
+            "g": 255,
+            "b": 255,
+            "a": 255
+          },
+          "hsl": {
+            "h": 0,
+            "s": 0,
+            "l": 1
+          },
+          "hsv": {
+            "h": 0,
+            "s": 0,
+            "v": 1
+          },
+          "a": 1
+        },
+        "textBrightAccent": {
+          "rgb": {
+            "r": 255,
+            "g": 255,
+            "b": 255,
+            "a": 255
+          },
+          "hsl": {
+            "h": 0,
+            "s": 0,
+            "l": 1
+          },
+          "hsv": {
+            "h": 0,
+            "s": 0,
+            "v": 1
+          },
+          "a": 1
+        },
+        "textSubdued": {
+          "rgb": {
+            "r": 255,
+            "g": 185,
+            "b": 217,
+            "a": 255
+          },
+          "hsl": {
+            "h": 333,
+            "s": 1,
+            "l": 0.8627450980392157
+          },
+          "hsv": {
+            "h": 333,
+            "s": 0.27450980392156865,
+            "v": 1
+          },
+          "a": 1
+        }
+      },
+      "higherContrast": {
+        "backgroundBase": {
+          "rgb": {
+            "r": 98,
+            "g": 0,
+            "b": 52,
+            "a": 255
+          },
+          "hsl": {
+            "h": 328,
+            "s": 1,
+            "l": 0.19215686274509805
+          },
+          "hsv": {
+            "h": 328,
+            "s": 1,
+            "v": 0.3843137254901961
+          },
+          "a": 1
+        },
+        "backgroundTintedBase": {
+          "rgb": {
+            "r": 143,
+            "g": 50,
+            "b": 89,
+            "a": 255
+          },
+          "hsl": {
+            "h": 335,
+            "s": 0.4818652849740933,
+            "l": 0.3784313725490196
+          },
+          "hsv": {
+            "h": 335,
+            "s": 0.6503496503496504,
+            "v": 0.5607843137254902
+          },
+          "a": 1
+        },
+        "textBase": {
+          "rgb": {
+            "r": 255,
+            "g": 255,
+            "b": 255,
+            "a": 255
+          },
+          "hsl": {
+            "h": 0,
+            "s": 0,
+            "l": 1
+          },
+          "hsv": {
+            "h": 0,
+            "s": 0,
+            "v": 1
+          },
+          "a": 1
+        },
+        "textBrightAccent": {
+          "rgb": {
+            "r": 30,
+            "g": 215,
+            "b": 96,
+            "a": 255
+          },
+          "hsl": {
+            "h": 141,
+            "s": 0.7551020408163265,
+            "l": 0.4803921568627451
+          },
+          "hsv": {
+            "h": 141,
+            "s": 0.8604651162790697,
+            "v": 0.8431372549019608
+          },
+          "a": 1
+        },
+        "textSubdued": {
+          "rgb": {
+            "r": 255,
+            "g": 185,
+            "b": 217,
+            "a": 255
+          },
+          "hsl": {
+            "h": 333,
+            "s": 1,
+            "l": 0.8627450980392157
+          },
+          "hsv": {
+            "h": 333,
+            "s": 0.27450980392156865,
+            "v": 1
+          },
+          "a": 1
+        }
+      }
+    },
+    "sixteenByNineCoverImages": null,
+    "mediaType": [
+      "AUDIO"
+    ],
+    "typeLabel": "Episode"
+  }
+}
