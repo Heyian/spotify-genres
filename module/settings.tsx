@@ -8,6 +8,8 @@ export interface GenreSettingsDeps {
   getEnabled(): boolean;
   setEnabled(v: boolean): void;
   clearCache(): Promise<void>;
+  getColumnEnabled(): boolean;
+  setColumnEnabled(v: boolean): void;
 }
 
 function ModelStatusRow({ store }: { store: ModelStore }) {
@@ -32,6 +34,11 @@ function GenreSettings({ deps }: { deps: GenreSettingsDeps }) {
   const [clearing, setClearing] = React.useState(false);
   return (
     <SettingsSection title="Genres">
+      <SettingsToggleRow
+        label="Show genres column in playlists"
+        getValue={deps.getColumnEnabled}
+        onChange={deps.setColumnEnabled}
+      />
       <SettingsToggleRow
         label="Infer genres from audio previews when MusicBrainz has none"
         getValue={deps.getEnabled}

@@ -16,12 +16,15 @@ import {
 import {
   AUDIO_FALLBACK_STORAGE_KEY,
   MODEL_VERSION,
+  PLAYLIST_COLUMN_STORAGE_KEY,
   audioRecheckDays,
   backoffInitialMs,
+  backfillMaxConsecutiveFailures,
   backoffMaxMs,
   deezerBudget,
   deezerWindowMs,
   durationToleranceS,
+  musicbrainzBackfillIntervalMs,
   musicbrainzBudget,
   musicbrainzTtlDays,
   musicbrainzWindowMs,
@@ -29,12 +32,16 @@ import {
 } from "./config.ts";
 import { createPreviewClassifier } from "./audio-decode.ts";
 import { createClassifier, type Classifier } from "./classifier-worker.ts";
+import { createBackfill } from "./backfill.ts";
 import { findPreview } from "./deezer.ts";
+import { withChangeEvents } from "./genre-cache.ts";
 import { openIndexedDbStore } from "./genre-cache-idb.ts";
 import { createGenreScheduler, type TrackRef } from "./genre-pipeline.ts";
 import { createJsonpTransport } from "./jsonp.ts";
 import type { ScoredGenres } from "./labels.ts";
 import { createModelStore } from "./model-store.ts";
+import { listPlaylistTracks } from "./playlist-source.ts";
+import { startPlaylistColumn } from "./playlist-column.ts";
 import { createRequestQueue } from "./request-queue.ts";
 import { registerGenreSettings } from "./settings.tsx";
 
@@ -536,14 +543,26 @@ export default async function (ctx: ModuleRuntimeContext) {
     }
   };
 
-  const mbQueue = createRequestQueue({ budget: musicbrainzBudget, windowMs: musicbrainzWindowMs, backoffInitialMs, backoffMaxMs });
+  const mbQueue = createRequestQueue({
+    budget: musicbrainzBudget,
+    windowMs: musicbrainzWindowMs,
+    backoffInitialMs,
+    backoffMaxMs,
+    backfillMinIntervalMs: musicbrainzBackfillIntervalMs,
+  });
   const deezerQueue = createRequestQueue({ budget: deezerBudget, windowMs: deezerWindowMs, backoffInitialMs, backoffMaxMs });
   const jsonp = createJsonpTransport();
 
+  // One store shared by the scheduler and the playlist column.
+  const store = withChangeEvents(openIndexedDbStore());
+  const rules = { musicbrainzTtlDays, audioRecheckDays, notFoundTtlDays, modelVersion: MODEL_VERSION };
+  const now = () => Date.now();
+  const modelReady = () => modelStore.status().state === "ready";
+
   const scheduler = createGenreScheduler({
-    store: openIndexedDbStore(),
-    rules: { musicbrainzTtlDays, audioRecheckDays, notFoundTtlDays, modelVersion: MODEL_VERSION },
-    now: () => Date.now(),
+    store,
+    rules,
+    now,
     queues: [mbQueue, deezerQueue],
     musicbrainz: (track, priority) =>
       mbQueue.enqueue(track.uri, priority, () => {
@@ -551,7 +570,7 @@ export default async function (ctx: ModuleRuntimeContext) {
         return fetchGenresFromMusicBrainz(track.artist, track.title, resolveMusicBrainzFetch());
       }),
     audioEnabled,
-    modelReady: () => modelStore.status().state === "ready",
+    modelReady,
     findPreview: (track, priority) =>
       deezerQueue.enqueue(track.uri, priority, () => findPreview(track, jsonp, durationToleranceS)),
     classifyPreview,
@@ -572,11 +591,44 @@ export default async function (ctx: ModuleRuntimeContext) {
     void scheduler.songChanged(current);
   };
 
+  const backfill = createBackfill({
+    resolve: (track) => scheduler.resolveBackfill(track),
+    maxConsecutiveFailures: backfillMaxConsecutiveFailures,
+  });
+  const columnEnabled = () => client.storage.get(PLAYLIST_COLUMN_STORAGE_KEY) !== "false";
+  let column: { stop(): void } | null = null;
+  const startColumn = (): void => {
+    if (column) return;
+    column = startPlaylistColumn({
+      store,
+      backfill,
+      history: client.platform.History,
+      listTracks: (uri, signal) =>
+        listPlaylistTracks((u, o) => client.platform.PlaylistAPI.getContents(u, o), uri, signal),
+      audioEnabled,
+      modelReady,
+      now,
+      rules,
+      log: (level, ...args) => genlog(level, ...args),
+    });
+  };
+  const stopColumn = (): void => {
+    column?.stop();
+    column = null;
+  };
+  if (columnEnabled()) startColumn();
+
   registerGenreSettings(registrar, {
     store: modelStore,
     getEnabled: audioEnabled,
     setEnabled: (value) => client.storage.set(AUDIO_FALLBACK_STORAGE_KEY, String(value)),
     clearCache: () => scheduler.clearCache(),
+    getColumnEnabled: columnEnabled,
+    setColumnEnabled: (value) => {
+      client.storage.set(PLAYLIST_COLUMN_STORAGE_KEY, String(value));
+      if (value) startColumn();
+      else stopColumn();
+    },
   });
   await modelStore.init();
   // Enabled earlier but the cached model is gone (cleared site data): fetch it again.
@@ -588,6 +640,7 @@ export default async function (ctx: ModuleRuntimeContext) {
   ctx.defer(() => {
     client.player?.removeEventListener?.("songchange", updateGenres);
     void classifier?.then(({ worker }) => worker.dispose(), () => undefined);
+    stopColumn();
     clearGenres();
   });
 }
