@@ -82,7 +82,7 @@ export function columnStyleText(rules: ListRule[]): string {
   const perList = rules.map((r) => `${SELECTORS.list}[${LIST_ATTR}="${r.id}"] { --grid-template-columns: ${r.template} !important; }`);
   return [
     ...perList,
-    `[${CELL_ATTR}], [${HEADER_ATTR}] { grid-column: genres; display: flex; align-items: center; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }`,
+    `[${CELL_ATTR}], [${HEADER_ATTR}] { grid-column: genres; align-self: center; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }`,
     `[${CELL_ATTR}].spotify-genres-cell--inferred { font-style: italic; }`,
   ].join("\n");
 }
@@ -130,6 +130,14 @@ export function rowUri(row: HTMLElement): string | null {
   return id ? "spotify:track:" + id : null;
 }
 
+/** True when the list is unmarked, its grid variable differs from `lastTemplate`, or its header lacks our cell. */
+export function listNeedsInstall(list: HTMLElement, lastTemplate: string | undefined): boolean {
+  if (!list.hasAttribute(LIST_ATTR)) return true;
+  if (list.style.getPropertyValue("--grid-template-columns") !== lastTemplate) return true;
+  const header = list.querySelector<HTMLElement>(SELECTORS.headerRow);
+  return !!header && !header.querySelector(`:scope > [${HEADER_ATTR}]`);
+}
+
 /** Adds the Genres track and header cell to one tracklist. Safe to call on every observer pass. */
 export function installColumn(list: HTMLElement): boolean {
   const template = list.style.getPropertyValue("--grid-template-columns");
@@ -142,7 +150,9 @@ export function installColumn(list: HTMLElement): boolean {
     const own = withGenresColumn(marked.style.getPropertyValue("--grid-template-columns"));
     if (own !== null) rules.push({ id: marked.getAttribute(LIST_ATTR) as string, template: own });
   }
-  styleElement(list.ownerDocument).textContent = columnStyleText(rules);
+  const style = styleElement(list.ownerDocument);
+  const text = columnStyleText(rules);
+  if (style.textContent !== text) style.textContent = text;
 
   bumpAttribute(list, "aria-colcount", NATIVE_COLCOUNT, WRITTEN_COLCOUNT);
 

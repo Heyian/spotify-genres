@@ -2,7 +2,7 @@ import type { Backfill, Visit } from "./backfill.ts";
 import { cellView } from "./column-cell.ts";
 import type { CacheRules, GenreCacheEntry, ObservableGenreStore } from "./genre-cache.ts";
 import { needsLookup, type TrackRef } from "./genre-pipeline.ts";
-import { SELECTORS, ensureRowCell, installColumn, renderCell, rowUri, uninstallColumn } from "./tracklist-dom.ts";
+import { SELECTORS, ensureRowCell, installColumn, listNeedsInstall, renderCell, rowUri, uninstallColumn } from "./tracklist-dom.ts";
 
 const RELIST_DEBOUNCE_MS = 2000;
 const TRACK_PREFIX = "spotify:track:";
@@ -41,6 +41,8 @@ export function startPlaylistColumn(deps: PlaylistColumnDeps): { stop(): void } 
   const tracks = new Map<string, TrackRef>();
   const requested = new Set<string>();
   const relistedFor = new Set<string>();
+  /** Grid variable each list was last installed with; false when installColumn refused it. */
+  const installedWith = new WeakMap<HTMLElement, { template: string; ok: boolean }>();
   const painted = new WeakMap<HTMLElement, string>();
 
   const fail = (what: string) => (error: unknown) => deps.log("warn", what, error);
@@ -90,7 +92,13 @@ export function startPlaylistColumn(deps: PlaylistColumnDeps): { stop(): void } 
     const seen: string[] = [];
     const missing = new Set<string>();
     for (const list of document.querySelectorAll<HTMLElement>(SELECTORS.list)) {
-      if (!installColumn(list)) {
+      const last = installedWith.get(list);
+      let ok = last?.ok ?? false;
+      if (!last || !ok || listNeedsInstall(list, last.template)) {
+        ok = installColumn(list);
+        installedWith.set(list, { template: list.style.getPropertyValue("--grid-template-columns"), ok });
+      }
+      if (!ok) {
         if (!warnedNoLast) {
           warnedNoLast = true;
           deps.log("warn", "genres column not installed: tracklist grid has no [last] line name");
