@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { GENRES_TRACK, findRowUri, withGenresColumn } from "../module/tracklist-dom.ts";
+import { GENRES_TRACK, columnStyleText, findRowUri, withGenresColumn } from "../module/tracklist-dom.ts";
 
 const grid = JSON.parse(readFileSync(join(import.meta.dirname, "fixtures/tracklist-grid.json"), "utf8")) as { wide: string; narrow: string };
 
@@ -33,4 +33,15 @@ test("find_row_uri_shallowest_first", () => {
   assert.equal(findRowUri(loop), null);
   assert.equal(findRowUri({ a: { b: { c: { uri: "spotify:track:D" } } } }, 2), null);
   assert.equal(findRowUri(null), null);
+});
+
+test("style_text_keeps_one_rule_per_list", () => {
+  const wide = withGenresColumn(grid.wide) as string;
+  const narrow = withGenresColumn(grid.narrow) as string;
+  const both = columnStyleText([{ id: "1", template: wide }, { id: "2", template: narrow }]);
+  assert.ok(both.includes(`[data-genres-col="1"] { --grid-template-columns: ${wide} !important; }`));
+  assert.ok(both.includes(`[data-genres-col="2"] { --grid-template-columns: ${narrow} !important; }`));
+  const rebuilt = columnStyleText([{ id: "1", template: narrow }, { id: "2", template: narrow }]);
+  assert.ok(rebuilt.includes(`[data-genres-col="1"] { --grid-template-columns: ${narrow} !important; }`));
+  assert.ok(rebuilt.includes(`[data-genres-col="2"] { --grid-template-columns: ${narrow} !important; }`));
 });

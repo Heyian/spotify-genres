@@ -70,6 +70,23 @@ const NATIVE_COLCOUNT = "data-genres-native-colcount";
 const WRITTEN_COLCOUNT = "data-genres-written-colcount";
 const NATIVE_COLINDEX = "data-genres-native-colindex";
 const WRITTEN_COLINDEX = "data-genres-written-colindex";
+let listCounter = 0;
+
+export interface ListRule {
+  id: string;
+  template: string;
+}
+
+/** One grid rule per installed list (keyed by its marker value), plus the shared cell rules. */
+export function columnStyleText(rules: ListRule[]): string {
+  const perList = rules.map((r) => `${SELECTORS.list}[${LIST_ATTR}="${r.id}"] { --grid-template-columns: ${r.template} !important; }`);
+  return [
+    ...perList,
+    `[${CELL_ATTR}], [${HEADER_ATTR}] { grid-column: genres; display: flex; align-items: center; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }`,
+    `[${CELL_ATTR}].spotify-genres-cell--inferred { font-style: italic; }`,
+  ].join("\n");
+}
+
 const STATES = ["genres", "waiting", "none", "empty"];
 
 /** Sets `name` to Spotify's value + 1. The native value is re-read whenever the attribute is not what we wrote. */
@@ -119,11 +136,13 @@ export function installColumn(list: HTMLElement): boolean {
   const widened = withGenresColumn(template);
   if (widened === null) return false;
 
-  list.setAttribute(LIST_ATTR, "");
-  styleElement(list.ownerDocument).textContent =
-    `${SELECTORS.list}[${LIST_ATTR}] { --grid-template-columns: ${widened} !important; }\n` +
-    `[${CELL_ATTR}], [${HEADER_ATTR}] { grid-column: genres; display: flex; align-items: center; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }\n` +
-    `[${CELL_ATTR}].spotify-genres-cell--inferred { font-style: italic; }`;
+  if (!list.getAttribute(LIST_ATTR)) list.setAttribute(LIST_ATTR, String(++listCounter));
+  const rules: ListRule[] = [];
+  for (const marked of list.ownerDocument.querySelectorAll<HTMLElement>(`[${LIST_ATTR}]`)) {
+    const own = withGenresColumn(marked.style.getPropertyValue("--grid-template-columns"));
+    if (own !== null) rules.push({ id: marked.getAttribute(LIST_ATTR) as string, template: own });
+  }
+  styleElement(list.ownerDocument).textContent = columnStyleText(rules);
 
   bumpAttribute(list, "aria-colcount", NATIVE_COLCOUNT, WRITTEN_COLCOUNT);
 
