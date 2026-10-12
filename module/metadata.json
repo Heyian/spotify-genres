@@ -1,7 +1,7 @@
 {
 	"name": "spotify-genres",
 	"kind": "extension",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"authors": ["Vexcited", "Heyian"],
 	"description": "Show the genres of the currently playing track in the player bar, with a click-through to the matching 'The Sound of Spotify' playlist.",
 	"entries": {

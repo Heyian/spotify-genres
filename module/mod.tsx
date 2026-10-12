@@ -515,7 +515,7 @@ const sha256Hex = async (buf: ArrayBuffer): Promise<string> =>
 
 export default async function (ctx: ModuleRuntimeContext) {
   const registrar = createRegistrar(ctx);
-  genlog("info", "module loaded, version 0.1.0");
+  genlog("info", "module loaded, version 0.2.0");
 
   CONFIG = readConfig((k) => client.storage.get(k));
   debugEnabled = client.storage.get("showGenre:debug") === "true";
