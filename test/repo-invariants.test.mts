@@ -48,3 +48,12 @@ test("research_pointer (AC33)", () => {
   const firstLine = read("docs/research/2026-10-06-research-audio-genre-classification.md").split("\n")[0];
   assert.ok(firstLine.includes("docs/specs/2026-10-06-audio-genre-fallback.md"), firstLine);
 });
+
+test("column_code_renders_text_only (column AC9, AC37)", () => {
+  for (const file of ["module/tracklist-dom.ts", "module/column-cell.ts"]) {
+    const source = read(file);
+    for (const banned of ["innerHTML", "insertAdjacentHTML", 'createElement("a")', '"click"']) {
+      assert.ok(!source.includes(banned), `${file} contains ${banned}`);
+    }
+  }
+});
