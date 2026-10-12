@@ -91,6 +91,11 @@ export function columnStyleText(rules: ListRule[]): string {
 
 const STATES = ["genres", "waiting", "none", "empty"];
 
+/** Skips the write when the value is already set, so unchanged passes cause no attribute mutations. */
+function setIfChanged(el: Element, name: string, value: string): void {
+  if (el.getAttribute(name) !== value) el.setAttribute(name, value);
+}
+
 /** Sets `name` to Spotify's value + 1. The native value is re-read whenever the attribute is not what we wrote. */
 function bumpAttribute(el: HTMLElement, name: string, nativeKey: string, writtenKey: string): number | null {
   const current = el.getAttribute(name);
@@ -100,7 +105,7 @@ function bumpAttribute(el: HTMLElement, name: string, nativeKey: string, written
   if (!Number.isFinite(native)) return null;
   const bumped = String(native + 1);
   if (current !== bumped) el.setAttribute(name, bumped);
-  el.setAttribute(writtenKey, bumped);
+  if (el.getAttribute(writtenKey) !== bumped) el.setAttribute(writtenKey, bumped);
   return native;
 }
 
@@ -171,7 +176,7 @@ export function installColumn(list: HTMLElement): boolean {
     }
     if (end) {
       const native = bumpAttribute(end, "aria-colindex", NATIVE_COLINDEX, WRITTEN_COLINDEX);
-      if (native !== null) cell.setAttribute("aria-colindex", String(native));
+      if (native !== null) setIfChanged(cell, "aria-colindex", String(native));
     }
   }
   return true;
@@ -190,7 +195,7 @@ export function ensureRowCell(row: HTMLElement): HTMLElement {
   }
   if (end) {
     const native = bumpAttribute(end, "aria-colindex", NATIVE_COLINDEX, WRITTEN_COLINDEX);
-    if (native !== null) cell.setAttribute("aria-colindex", String(native));
+    if (native !== null) setIfChanged(cell, "aria-colindex", String(native));
   }
   return cell;
 }
