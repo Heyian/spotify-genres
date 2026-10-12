@@ -63,9 +63,15 @@ class FakeEl {
     else this.children.splice(at, 0, child);
   }
   matches(simple: string): boolean {
-    if (simple.startsWith(".")) return this.classes.includes(simple.slice(1));
-    const attr = simple.match(/^\[([^\]=]+)\]$/);
-    return attr ? this.attrs.has(attr[1]) : false;
+    // A compound of an optional `.class` followed by any number of `[attr]` / `[attr="value"]` parts.
+    const parts = simple.match(/^(?:\.([\w-]+))?((?:\[[^\]]+\])*)$/);
+    if (!parts || simple === "") return false;
+    if (parts[1] && !this.classes.includes(parts[1])) return false;
+    for (const attr of parts[2].matchAll(/\[([^\]=]+)(?:="([^"]*)")?\]/g)) {
+      const have = this.attrs.get(attr[1]);
+      if (have === undefined || (attr[2] !== undefined && have !== attr[2])) return false;
+    }
+    return true;
   }
   // Supports `:scope > X` (direct children) and `X` (descendants) for a single class or attribute selector.
   querySelector(selector: string): FakeEl | null {
@@ -94,9 +100,9 @@ class FakeDoc {
   }
 }
 
-function buildPlaylist(): { doc: FakeDoc; list: FakeEl; rows: FakeEl[] } {
-  const doc = new FakeDoc();
+function buildPlaylist(doc = new FakeDoc(), testid = "playlist-tracklist"): { doc: FakeDoc; list: FakeEl; rows: FakeEl[] } {
   const list = doc.body.append(new FakeEl(doc, ["main-trackList-trackList"]));
+  list.attrs.set("data-testid", testid);
   list.attrs.set("aria-colcount", "5");
   list.style = { getPropertyValue: () => grid.wide };
   const header = list.append(new FakeEl(doc, ["main-trackList-trackListHeaderRow"]));
@@ -124,4 +130,24 @@ test("a_second_pass_over_unchanged_state_writes_no_attributes", () => {
   doc.writes.length = 0;
   pass(list, rows);
   assert.deepEqual(doc.writes, []);
+});
+
+test("recommended_tracklist_is_skipped (column AC1)", () => {
+  const { doc, list: own, rows: ownRows } = buildPlaylist();
+  const { list: recommended, rows: recRows } = buildPlaylist(doc, "track-list");
+  const found = doc.querySelectorAll(SELECTORS.list);
+  assert.deepEqual(found, [own]);
+  // The same install path playlist-column's pass() runs, over the lists the query returns.
+  for (const list of found) {
+    assert.ok(installColumn(list as never));
+    for (const row of list.children.filter((c) => c.matches(SELECTORS.row))) ensureRowCell(row as never);
+  }
+  assert.ok(own.hasAttribute("data-genres-col"));
+  assert.equal(own.getAttribute("aria-colcount"), "6");
+  assert.ok(ownRows.every((r) => r.querySelector(":scope > [data-genres-cell]")));
+  assert.equal(recommended.hasAttribute("data-genres-col"), false);
+  assert.equal(recommended.getAttribute("aria-colcount"), "5");
+  assert.equal(recommended.querySelector("[data-genres-cell]"), null);
+  assert.equal(recommended.querySelector("[data-genres-header]"), null);
+  assert.ok(recRows.every((r) => r.getAttribute("aria-colindex") === null && r.children[0].getAttribute("aria-colindex") === "5"));
 });
