@@ -31,9 +31,13 @@
 }
 
 [data-genres-col] {
+	[data-genres-cell],
+	[data-genres-header] {
+		// Album text is `encore-text-body-small`, which computes to this token (14px live, 1.2.96.518).
+		font-size: var(--encore-text-size-smaller, 0.875rem);
+	}
+
 	[data-genres-cell] {
-		// The Album column's size is not visible in this repo; inherit from the row section.
-		font-size: inherit;
 		color: var(--spice-subtext);
 		white-space: nowrap;
 		overflow: hidden;
